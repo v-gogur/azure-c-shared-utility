@@ -22,8 +22,6 @@
 #include "lwip/netdb.h"
 //#include "openssl_client.h"
 #include "openssl/ssl.h"
-//#include "espressif/esp8266/ets_sys.h"
-//#include "espressif/espconn.h"
 
 #include <stdio.h>
 #include <stdbool.h>
