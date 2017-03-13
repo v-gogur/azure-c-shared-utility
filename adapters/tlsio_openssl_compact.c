@@ -35,6 +35,7 @@
 #include "azure_c_shared_utility/socketio.h"
 #include "azure_c_shared_utility/xlogging.h"
 #include "azure_c_shared_utility/crt_abstractions.h"
+#include "azure_c_shared_utility/dns_compact.h"
 
 #define OPENSSL_FRAGMENT_SIZE 5120
 #define OPENSSL_LOCAL_TCP_PORT 1000
@@ -178,7 +179,6 @@ static int openssl_thread_LWIP_CONNECTION(TLS_IO_INSTANCE* p)
     fd_set writeset;
     fd_set errset;
 
-    ip_addr_t target_ip;
     SSL_CTX *ctx;
     SSL *ssl;
 
@@ -186,10 +186,15 @@ static int openssl_thread_LWIP_CONNECTION(TLS_IO_INSTANCE* p)
 
      LogInfo("OpenSSL thread start...");
 
-    int netconn_retry = 0;
-    do {
-        ret = netconn_gethostbyname(tls_io_instance->hostname, &target_ip);
-    } while(ret && netconn_retry++ < MAX_RETRY);
+	uint32_t ipV4address = DNS_Compact_GetIPv4(tls_io_instance->hostname);
+
+	if (ipV4address == 0)
+	{
+		// TODO: Get rid of this return in the middle (roy)
+		return -1;
+	}
+
+
 
      LogInfo("create socket ......");
     sock = socket(AF_INET, SOCK_STREAM, 0);
@@ -217,7 +222,7 @@ static int openssl_thread_LWIP_CONNECTION(TLS_IO_INSTANCE* p)
         {
             memset(&sock_addr, 0, sizeof(sock_addr));
             sock_addr.sin_family = AF_INET;
-            sock_addr.sin_addr.s_addr = target_ip.u_addr.ip4.addr;
+            sock_addr.sin_addr.s_addr = ipV4address;
             sock_addr.sin_port = htons(tls_io_instance->port);
 
             lwip_set_non_block(sock);
