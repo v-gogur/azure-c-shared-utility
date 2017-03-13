@@ -20,8 +20,6 @@
 #include "lwip/ip_addr.h"
 #include "lwip/api.h"
 #include "lwip/netdb.h"
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
 //#include "openssl_client.h"
 #include "openssl/ssl.h"
 //#include "espressif/esp8266/ets_sys.h"
@@ -36,6 +34,7 @@
 #include "azure_c_shared_utility/xlogging.h"
 #include "azure_c_shared_utility/crt_abstractions.h"
 #include "azure_c_shared_utility/dns_compact.h"
+#include "azure_c_shared_utility/threadapi.h"
 
 #define OPENSSL_FRAGMENT_SIZE 5120
 #define OPENSSL_LOCAL_TCP_PORT 1000
@@ -211,7 +210,7 @@ static int openssl_thread_LWIP_CONNECTION(TLS_IO_INSTANCE* p)
         sock_addr.sin_port = htons(OPENSSL_LOCAL_TCP_PORT);
         int reuseAddr=1;
         ret = setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &reuseAddr, sizeof(reuseAddr));
-        vTaskDelay(10 * TICK_RATE);	// delay 10 s
+		ThreadAPI_Sleep(10 * 1000);	// delay 10 s
         ret = bind(sock, (struct sockaddr*)&sock_addr, sizeof(sock_addr));
         
         if (ret) {
@@ -267,7 +266,7 @@ static int openssl_thread_LWIP_CONNECTION(TLS_IO_INSTANCE* p)
                     }
 
                     retry++;
-                    vTaskDelay(RETRY_DELAY/1000);
+					ThreadAPI_Sleep(RETRY_DELAY);
                 }
 
                 ctx = SSL_CTX_new(TLSv1_client_method());
@@ -314,7 +313,7 @@ static int openssl_thread_LWIP_CONNECTION(TLS_IO_INSTANCE* p)
                                     lwip_select(sock + 1, &readset, &writeset, &errset, NULL);
 
                                     retry++;
-                                    vTaskDelay(RETRY_DELAY/1000);
+									ThreadAPI_Sleep(RETRY_DELAY);
                                 }
                                 if (retry >= MAX_RETRY)
                                 {
@@ -633,7 +632,11 @@ int tlsio_openssl_send(CONCRETE_IO_HANDLE tls_io, const void* buffer, size_t siz
                 {
                     retry++;
                 }
-                vTaskDelay(5);
+                //vTaskDelay(5);
+				// TODO: If this sleep is 5 msec then the device goes into an infinite
+				// loop of failure. That is very wrong, and probably indicates a need
+				// for redesign. Loop timing should be mere optimization. (roy)
+				ThreadAPI_Sleep(50);
             }
 
             if (retry >= MAX_RETRY_WRITE)

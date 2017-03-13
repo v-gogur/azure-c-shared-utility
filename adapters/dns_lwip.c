@@ -3,7 +3,6 @@
 
 #include "lwip/api.h"
 
-#include "azure_c_shared_utility/platform.h"
 #include "azure_c_shared_utility/dns_compact.h"
 
 #define MAX_RETRY 20
