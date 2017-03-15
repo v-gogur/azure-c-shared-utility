@@ -31,7 +31,6 @@
 #include "azure_c_shared_utility/socketio.h"
 #include "azure_c_shared_utility/xlogging.h"
 #include "azure_c_shared_utility/crt_abstractions.h"
-#include "azure_c_shared_utility/dns_compact.h"
 #include "azure_c_shared_utility/threadapi.h"
 
 #define OPENSSL_FRAGMENT_SIZE 5120
@@ -40,7 +39,15 @@
 #define MAX_RETRY_WRITE 500
 #define RETRY_DELAY 1000
 #define TICK_RATE CONFIG_FREERTOS_HZ
-typedef uint8_t  uint8;
+
+// The EXTRACT_IPV4 may have to be redefined for different systems to extract the uint32_t AF_INET address
+#ifdef _INC_WINAPIFAMILY	// An example WinSock test; feel free to change to a better one to compile under Windows
+#define EXTRACT_IPV4(ptr) ((struct sockaddr_in *) ptr->ai_addr)->sin_addr.S_un.S_addr
+#else
+// The default definition handles lwIP. Please add comments for other systems tested.
+#define EXTRACT_IPV4(ptr) ((struct sockaddr_in *) ptr->ai_addr)->sin_addr.s_addr
+#endif
+
 
 typedef enum TLSIO_STATE_TAG
 {
@@ -125,7 +132,7 @@ static void indicate_open_complete(TLS_IO_INSTANCE* tls_io_instance, IO_OPEN_RES
 }
 
 
-static int lwip_net_errno(int fd)
+static int get_socket_errno(int fd)
 {
     int sock_errno = 0;
     u32_t optlen = sizeof(sock_errno);
@@ -133,35 +140,55 @@ static int lwip_net_errno(int fd)
     return sock_errno;
 }
 
-static void lwip_set_non_block(int fd) 
+// This static helper is called only when fd has just been
+// determined to be valid, so no validity check is needed here.
+static void set_non_block(int fd)
 {
-  int flags = -1;
-  int error = 0;
+	// The lwIP and linux implementations of both F_GETFL fcntl and F_SETFL
+	// are macros that dereference a member of the fd struct, and so cannot fail.
+	int originalFlags = fcntl(fd, F_GETFL, 0);
+	(void)fcntl(fd, F_SETFL, originalFlags | O_NONBLOCK);
+}
 
-  while(1){
-      flags = fcntl(fd, F_GETFL, 0);
-      if (flags == -1){
-          error = lwip_net_errno(fd);
-          if (error != EINTR){
-              break;
-          }
-      } else{
-          break;
-      }
-  }
 
-  while(1){
-      flags = fcntl(fd, F_SETFL, flags | O_NONBLOCK);
-      if (flags == -1) {
-          error = lwip_net_errno(fd);
-          if (error != EINTR){
-              break;
-          }
-      } else{
-          break;
-      }
-  }
+static uint32_t get_ipv4(const char* hostname)
+{
+	struct addrinfo *addrInfo = NULL;
+	struct addrinfo *ptr = NULL;
+	struct addrinfo hints;
 
+	uint32_t result = 0;
+
+	//--------------------------------
+	// Setup the hints address info structure
+	// which is passed to the getaddrinfo() function
+	memset(&hints, 0, sizeof(hints));
+	hints.ai_family = AF_INET;
+	hints.ai_socktype = SOCK_STREAM;
+	hints.ai_protocol = IPPROTO_TCP;
+
+	//--------------------------------
+	// Call getaddrinfo(). If the call succeeds,
+	// the result variable will hold a linked list
+	// of addrinfo structures containing response
+	// information
+	int getAddrResult = getaddrinfo(hostname, NULL, &hints, &addrInfo);
+	if (getAddrResult == 0)
+	{
+		// If we find the AF_INET address, use it as the return value
+		for (ptr = addrInfo; ptr != NULL; ptr = ptr->ai_next)
+		{
+			switch (ptr->ai_family)
+			{
+			case AF_INET:
+				result = EXTRACT_IPV4(ptr);
+				break;
+			}
+		}
+		freeaddrinfo(addrInfo);
+	}
+
+	return result;
 }
 
 
@@ -183,7 +210,7 @@ static int openssl_thread_LWIP_CONNECTION(TLS_IO_INSTANCE* p)
 
      LogInfo("OpenSSL thread start...");
 
-	uint32_t ipV4address = DNS_Compact_GetIPv4(tls_io_instance->hostname);
+	uint32_t ipV4address = get_ipv4(tls_io_instance->hostname);
 
 	if (ipV4address == 0)
 	{
@@ -222,11 +249,11 @@ static int openssl_thread_LWIP_CONNECTION(TLS_IO_INSTANCE* p)
             sock_addr.sin_addr.s_addr = ipV4address;
             sock_addr.sin_port = htons(tls_io_instance->port);
 
-            lwip_set_non_block(sock);
+            set_non_block(sock);
             ret = connect(sock, (struct sockaddr*)&sock_addr, sizeof(sock_addr));
             if (ret == -1) {
-                ret = lwip_net_errno(sock);
-                LogInfo("lwip_net_errno ret: %d", ret);
+                ret = get_socket_errno(sock);
+                LogInfo("get_socket_errno ret: %d", ret);
                 if (ret != EINPROGRESS){
                     result = __LINE__;
                     ret = -1;
@@ -617,7 +644,7 @@ int tlsio_openssl_send(CONCRETE_IO_HANDLE tls_io, const void* buffer, size_t siz
             while(size > 0 && retry < MAX_RETRY_WRITE){
                 /* Codes_SRS_TLSIO_SSL_ESP8266_99_016: [ The tlsio_openssl_send SSL_write success]*/
                 /* Codes_SRS_TLSIO_SSL_ESP8266_99_017: [ The tlsio_openssl_send SSL_write failure]*/
-                res = SSL_write(tls_io_instance->ssl, ((uint8*)buffer)+total_write, size);
+                res = SSL_write(tls_io_instance->ssl, ((uint8_t*)buffer)+total_write, size);
 
                 //printf("SSL_write res: %d, size: %d, retry: %d", res, size, retry);
                // printf("SSL_write res:%d size:%d retry:%d\n",res,size,retry);

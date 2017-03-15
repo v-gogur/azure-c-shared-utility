@@ -21,7 +21,7 @@ extern "C" {
  *
  * @param   serverName	The url of the SSL server to be contacted.
  *
- * @return	@c A non-zero integer file descriptor (fd) 0 if the API call 
+ * @return	@c A non-zero integer file descriptor (fd) if the API call 
  *          is successful or 0 in case it fails. Error logging is
  *          performed by the underlying concrete implementation, so no
  *          further error logging is necessary.
