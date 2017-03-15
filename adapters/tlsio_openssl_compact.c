@@ -267,7 +267,6 @@ static int openssl_thread_LWIP_CONNECTION(TLS_IO_INSTANCE* tls_io_instance)
 			ret = connect(sock, (struct sockaddr*)&sock_addr, sizeof(sock_addr));
             if (ret == -1) {
                 ret = get_socket_errno(sock);
-                LogInfo("get_socket_errno ret: %d", ret);
                 if (ret != EINPROGRESS){
                     result = __LINE__;
                     ret = -1;
@@ -276,10 +275,8 @@ static int openssl_thread_LWIP_CONNECTION(TLS_IO_INSTANCE* tls_io_instance)
                 }
             }
 
-            if(ret != -1 || ret == EINPROGRESS)
+            if(ret != -1)
             {
-                char recv_buf[128];
-                size_t recv_bytes = (size_t)sizeof(recv_buf);
                 int retry = 0;
 
                 while (retry < MAX_RETRY){
@@ -299,7 +296,6 @@ static int openssl_thread_LWIP_CONNECTION(TLS_IO_INSTANCE* tls_io_instance)
                         }
                 
                         if (FD_ISSET(sock, &readset)){
-                            memset(recv_buf, 0, recv_bytes);
                             break;
                         }
                     }
