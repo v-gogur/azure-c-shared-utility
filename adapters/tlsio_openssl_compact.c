@@ -38,7 +38,6 @@
 #define MAX_RETRY 20
 #define MAX_RETRY_WRITE 500
 #define RETRY_DELAY 1000
-#define TICK_RATE CONFIG_FREERTOS_HZ
 
 // The EXTRACT_IPV4 may have to be redefined for different systems to extract the uint32_t AF_INET address
 #ifdef _INC_WINAPIFAMILY	// An example WinSock test; feel free to change to a better one to compile under Windows
@@ -140,17 +139,6 @@ static int get_socket_errno(int fd)
     return sock_errno;
 }
 
-// This static helper is called only when fd has just been
-// determined to be valid, so no validity check is needed here.
-static void set_non_block(int fd)
-{
-	// The lwIP and linux implementations of both F_GETFL fcntl and F_SETFL
-	// are macros that dereference a member of the fd struct, and so cannot fail.
-	int originalFlags = fcntl(fd, F_GETFL, 0);
-	(void)fcntl(fd, F_SETFL, originalFlags | O_NONBLOCK);
-}
-
-
 static uint32_t get_ipv4(const char* hostname)
 {
 	struct addrinfo *addrInfo = NULL;
@@ -249,8 +237,13 @@ static int openssl_thread_LWIP_CONNECTION(TLS_IO_INSTANCE* p)
             sock_addr.sin_addr.s_addr = ipV4address;
             sock_addr.sin_port = htons(tls_io_instance->port);
 
-            set_non_block(sock);
-            ret = connect(sock, (struct sockaddr*)&sock_addr, sizeof(sock_addr));
+			// When supplied with either F_GETFL and F_SETFL parameters, the fcntl function
+			// does simple bit flips which have no error path, so it is not necessary to
+			// check for errors. (Source checked for linux and lwIP).
+			int originalFlags = fcntl(sock, F_GETFL, 0);
+			(void)fcntl(sock, F_SETFL, originalFlags | O_NONBLOCK);
+
+			ret = connect(sock, (struct sockaddr*)&sock_addr, sizeof(sock_addr));
             if (ret == -1) {
                 ret = get_socket_errno(sock);
                 LogInfo("get_socket_errno ret: %d", ret);
