@@ -221,9 +221,8 @@ static int openssl_thread_LWIP_CONNECTION(TLS_IO_INSTANCE* p)
         sock_addr.sin_family = AF_INET;
         sock_addr.sin_addr.s_addr = 0;
         sock_addr.sin_port = htons(OPENSSL_LOCAL_TCP_PORT);
-        int reuseAddr=1;
+        int reuseAddr = 1;
         ret = setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &reuseAddr, sizeof(reuseAddr));
-		ThreadAPI_Sleep(10 * 1000);	// delay 10 s
         ret = bind(sock, (struct sockaddr*)&sock_addr, sizeof(sock_addr));
         
         if (ret) {
