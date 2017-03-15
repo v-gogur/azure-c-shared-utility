@@ -180,7 +180,7 @@ static uint32_t get_ipv4(const char* hostname)
 }
 
 
-static int openssl_thread_LWIP_CONNECTION(TLS_IO_INSTANCE* p)
+static int openssl_thread_LWIP_CONNECTION(TLS_IO_INSTANCE* tls_io_instance)
 {
     int result;
     int ret;
@@ -194,9 +194,7 @@ static int openssl_thread_LWIP_CONNECTION(TLS_IO_INSTANCE* p)
     SSL_CTX *ctx;
     SSL *ssl;
 
-    TLS_IO_INSTANCE* tls_io_instance = p;
-
-     LogInfo("OpenSSL thread start...");
+    LogInfo("OpenSSL thread start...");
 
 	uint32_t ipV4address = get_ipv4(tls_io_instance->hostname);
 
@@ -217,13 +215,43 @@ static int openssl_thread_LWIP_CONNECTION(TLS_IO_INSTANCE* p)
     else
     {
         tls_io_instance->sock = sock;
-        memset(&sock_addr, 0, sizeof(sock_addr));
-        sock_addr.sin_family = AF_INET;
-        sock_addr.sin_addr.s_addr = 0;
-        sock_addr.sin_port = htons(OPENSSL_LOCAL_TCP_PORT);
-        int reuseAddr = 1;
-        ret = setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &reuseAddr, sizeof(reuseAddr));
-        ret = bind(sock, (struct sockaddr*)&sock_addr, sizeof(sock_addr));
+
+		LogInfo("set socket keep-alive ");
+		int keepAlive = 1; //enable keepalive
+		int keepIdle = 20; //20s
+		int keepInterval = 2; //2s
+		int keepCount = 3; //retry # of times
+
+		ret = 0;
+		ret = ret || setsockopt(sock, SOL_SOCKET, SO_KEEPALIVE, (void *)&keepAlive, sizeof(keepAlive));
+		ret = ret || setsockopt(sock, IPPROTO_TCP, TCP_KEEPIDLE, (void *)&keepIdle, sizeof(keepIdle));
+		ret = ret || setsockopt(sock, IPPROTO_TCP, TCP_KEEPINTVL, (void *)&keepInterval, sizeof(keepInterval));
+		ret = ret || setsockopt(sock, IPPROTO_TCP, TCP_KEEPCNT, (void *)&keepCount, sizeof(keepCount));
+
+		if (ret != 0) {
+			result = __LINE__;
+			LogError("set socket keep-alive failed, ret = %d ", ret);
+			return result;
+			// TODO: fix this return in the middle
+		}
+		else
+		{
+			LogInfo("set socket keep-alive OK");
+		}
+
+		// When supplied with either F_GETFL and F_SETFL parameters, the fcntl function
+		// does simple bit flips which have no error path, so it is not necessary to
+		// check for errors. (Source checked for linux and lwIP).
+		int originalFlags = fcntl(sock, F_GETFL, 0);
+		(void)fcntl(sock, F_SETFL, originalFlags | O_NONBLOCK);
+
+
+		memset(&sock_addr, 0, sizeof(sock_addr));
+		sock_addr.sin_family = AF_INET;
+		sock_addr.sin_addr.s_addr = 0;
+		sock_addr.sin_port = 0; // random local port
+
+		ret = bind(sock, (struct sockaddr*)&sock_addr, sizeof(sock_addr));
         
         if (ret) {
             result = __LINE__;
@@ -231,16 +259,10 @@ static int openssl_thread_LWIP_CONNECTION(TLS_IO_INSTANCE* p)
         }
         else
         {
-            memset(&sock_addr, 0, sizeof(sock_addr));
-            sock_addr.sin_family = AF_INET;
-            sock_addr.sin_addr.s_addr = ipV4address;
-            sock_addr.sin_port = htons(tls_io_instance->port);
-
-			// When supplied with either F_GETFL and F_SETFL parameters, the fcntl function
-			// does simple bit flips which have no error path, so it is not necessary to
-			// check for errors. (Source checked for linux and lwIP).
-			int originalFlags = fcntl(sock, F_GETFL, 0);
-			(void)fcntl(sock, F_SETFL, originalFlags | O_NONBLOCK);
+			memset(&sock_addr, 0, sizeof(sock_addr));
+			sock_addr.sin_family = AF_INET;
+			sock_addr.sin_addr.s_addr = ipV4address;
+			sock_addr.sin_port = htons(tls_io_instance->port);
 
 			ret = connect(sock, (struct sockaddr*)&sock_addr, sizeof(sock_addr));
             if (ret == -1) {
