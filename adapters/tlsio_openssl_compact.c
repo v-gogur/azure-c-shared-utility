@@ -290,6 +290,10 @@ static int openssl_thread_LWIP_CONNECTION(TLS_IO_INSTANCE* tls_io_instance)
                     FD_SET(sock, &errset);
                 
                     ret = lwip_select(sock + 1, &readset, &writeset, &errset, NULL);
+					if (ret <= 0) {
+						result = __LINE__;
+						LogError("select failed: %d", lwip_net_errno(sock));
+					}
                     if (ret > 0){
                         if (FD_ISSET(sock, &writeset)){
                           break;
