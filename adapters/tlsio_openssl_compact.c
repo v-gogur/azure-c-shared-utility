@@ -187,9 +187,6 @@ static int openssl_thread_LWIP_CONNECTION(TLS_IO_INSTANCE* tls_io_instance)
     int sock;
 
     struct sockaddr_in sock_addr;
-    fd_set readset;
-    fd_set writeset;
-    fd_set errset;
 
     SSL_CTX *ctx;
     SSL *ssl;
@@ -259,7 +256,8 @@ static int openssl_thread_LWIP_CONNECTION(TLS_IO_INSTANCE* tls_io_instance)
 
         ret = bind(sock, (struct sockaddr*)&sock_addr, sizeof(sock_addr));
         
-        if (ret) {
+        if (ret) 
+		{
             result = __LINE__;
             LogError("bind socket failed");
         }
@@ -271,9 +269,11 @@ static int openssl_thread_LWIP_CONNECTION(TLS_IO_INSTANCE* tls_io_instance)
             sock_addr.sin_port = htons(tls_io_instance->port);
 
             ret = connect(sock, (struct sockaddr*)&sock_addr, sizeof(sock_addr));
-            if (ret == -1) {
+            if (ret == -1) 
+			{
                 ret = get_socket_errno(sock);
-                if (ret != EINPROGRESS){
+                if (ret != EINPROGRESS)
+				{
                     result = __LINE__;
                     ret = -1;
                     close(sock);
@@ -283,43 +283,7 @@ static int openssl_thread_LWIP_CONNECTION(TLS_IO_INSTANCE* tls_io_instance)
 
             if(ret != -1)
             {
-                //int retry = 0;
-
-                //while (retry < MAX_RETRY)
-                //{
-                //    FD_ZERO(&readset);
-                //    FD_SET(sock, &readset);
-                //
-                //    FD_ZERO(&writeset);
-                //    FD_SET(sock, &writeset);
-                //
-                //    FD_ZERO(&errset);
-                //    FD_SET(sock, &errset);
-                //
-                //    ret = lwip_select(sock + 1, &readset, &writeset, &errset, NULL);
-                //    if (ret <= 0) 
-                //    {
-                //        result = __LINE__;
-                //        LogError("select failed: %d", get_socket_errno(sock));
-                //    }
-                //    if (ret > 0)
-                //    {
-                //        if (FD_ISSET(sock, &writeset))
-                //        {
-                //          break;
-                //        }
-                //
-                //        if (FD_ISSET(sock, &readset))
-                //        {
-                //            break;
-                //        }
-                //    }
-
-                //    retry++;
-                //    ThreadAPI_Sleep(RETRY_DELAY);
-                //}
-
-                ctx = SSL_CTX_new(TLSv1_client_method());
+                ctx = SSL_CTX_new(TLSv1_2_client_method());
                 if (!ctx) 
                 {
                     result = __LINE__;
@@ -345,7 +309,6 @@ static int openssl_thread_LWIP_CONNECTION(TLS_IO_INSTANCE* tls_io_instance)
                         {
                             // returns 1 on success
                             ret = SSL_set_fd(ssl, sock);
-                            //(void*)printf("SSL_set_fd ret:%d \n", ret);
                             if (ret != 1)
                             {
                                 result = __LINE__;
@@ -357,14 +320,21 @@ static int openssl_thread_LWIP_CONNECTION(TLS_IO_INSTANCE* tls_io_instance)
                                 int retry = 0;
                                 while (SSL_connect(ssl) != 0 && retry < MAX_RETRY)
                                 {  
-                                    //FD_ZERO(&readset);
-                                    //FD_SET(sock, &readset);
-                                    //FD_ZERO(&writeset);
-                                    //FD_SET(sock, &writeset);
-                                    //FD_ZERO(&errset);
-                                    //FD_SET(sock, &errset);
+									// According to the OpenSSL man page, there's nothing to do
+									// for a non-blocking socket but wait 
+									// ("... nothing is to be done...")
 
-                                    //lwip_select(sock + 1, &readset, &writeset, &errset, NULL);
+									// "If the underlying BIO is non - blocking, SSL_connect() will also 
+									// return when the underlying BIO could not satisfy the needs of 
+									// SSL_connect() to continue the handshake, indicating the 
+									// problem by the return value - 1. In this case a call to 
+									// SSL_get_error() with the return value of SSL_connect() will 
+									// yield SSL_ERROR_WANT_READ or SSL_ERROR_WANT_WRITE.The calling 
+									// process then must repeat the call after taking appropriate 
+									// action to satisfy the needs of SSL_connect().The action 
+									// depends on the underlying BIO.When using a non - blocking 
+									// socket, nothing is to be done, but select() can be used to 
+									// check for the required condition."
 
                                     retry++;
                                     ThreadAPI_Sleep(RETRY_DELAY);
@@ -391,6 +361,18 @@ static int openssl_thread_LWIP_CONNECTION(TLS_IO_INSTANCE* tls_io_instance)
     }
     return result;
 }
+
+//If the underlying BIO is non - blocking, SSL_connect() will also 
+//return when the underlying BIO could not satisfy the needs of 
+//SSL_connect() to continue the handshake, indicating the 
+//problem by the return value - 1. In this case a call to 
+//SSL_get_error() with the return value of SSL_connect() will 
+//yield SSL_ERROR_WANT_READ or SSL_ERROR_WANT_WRITE.The calling 
+//process then must repeat the call after taking appropriate 
+//action to satisfy the needs of SSL_connect().The action 
+//depends on the underlying BIO.When using a non - blocking 
+//socket, nothing is to be done, but select() can be used to 
+//check for the required condition.
 
 static int send_handshake_bytes(TLS_IO_INSTANCE* tls_io_instance)
 {

@@ -16,17 +16,24 @@ extern "C" {
 #include "azure_c_shared_utility/umock_c_prod.h"
 
 
-/**
- * @brief	Create a socket that is correctly configured for use by a TLSIO adapter.
- *
- * @param   serverName	The url of the SSL server to be contacted.
- *
- * @return	@c A non-zero integer file descriptor (fd) if the API call 
- *          is successful or 0 in case it fails. Error logging is
- *          performed by the underlying concrete implementation, so no
- *          further error logging is necessary.
- */
-MOCKABLE_FUNCTION(, int, SSL_Socket_Create, const char*, serverName);
+	/**
+	* @brief	Create a non-blocking socket that is correctly configured for use by a TLSIO adapter.
+	*
+	* @param   serverName	The url of the SSL server to be contacted.
+	*
+	* @return	@c A non-zero integer file descriptor (fd) if the API call
+	*          is successful or 0 in case it fails. Error logging is
+	*          performed by the underlying concrete implementation, so no
+	*          further error logging is necessary.
+	*/
+	MOCKABLE_FUNCTION(, int, SSL_Socket_Create, const char*, serverName);
+
+	/**
+	* @brief	Close the socket returned by SSL_Socket_Create.
+	*
+	* @param   serverName	The url of the SSL server to be contacted.
+	*/
+	MOCKABLE_FUNCTION(, void, SSL_Socket_Close, int, socket);
 
 
 #ifdef __cplusplus
