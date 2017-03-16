@@ -283,41 +283,41 @@ static int openssl_thread_LWIP_CONNECTION(TLS_IO_INSTANCE* tls_io_instance)
 
             if(ret != -1)
             {
-                int retry = 0;
+                //int retry = 0;
 
-                while (retry < MAX_RETRY)
-                {
-                    FD_ZERO(&readset);
-                    FD_SET(sock, &readset);
-                
-                    FD_ZERO(&writeset);
-                    FD_SET(sock, &writeset);
-                
-                    FD_ZERO(&errset);
-                    FD_SET(sock, &errset);
-                
-                    ret = lwip_select(sock + 1, &readset, &writeset, &errset, NULL);
-                    if (ret <= 0) 
-                    {
-                        result = __LINE__;
-                        LogError("select failed: %d", get_socket_errno(sock));
-                    }
-                    if (ret > 0)
-                    {
-                        if (FD_ISSET(sock, &writeset))
-                        {
-                          break;
-                        }
-                
-                        if (FD_ISSET(sock, &readset))
-                        {
-                            break;
-                        }
-                    }
+                //while (retry < MAX_RETRY)
+                //{
+                //    FD_ZERO(&readset);
+                //    FD_SET(sock, &readset);
+                //
+                //    FD_ZERO(&writeset);
+                //    FD_SET(sock, &writeset);
+                //
+                //    FD_ZERO(&errset);
+                //    FD_SET(sock, &errset);
+                //
+                //    ret = lwip_select(sock + 1, &readset, &writeset, &errset, NULL);
+                //    if (ret <= 0) 
+                //    {
+                //        result = __LINE__;
+                //        LogError("select failed: %d", get_socket_errno(sock));
+                //    }
+                //    if (ret > 0)
+                //    {
+                //        if (FD_ISSET(sock, &writeset))
+                //        {
+                //          break;
+                //        }
+                //
+                //        if (FD_ISSET(sock, &readset))
+                //        {
+                //            break;
+                //        }
+                //    }
 
-                    retry++;
-                    ThreadAPI_Sleep(RETRY_DELAY);
-                }
+                //    retry++;
+                //    ThreadAPI_Sleep(RETRY_DELAY);
+                //}
 
                 ctx = SSL_CTX_new(TLSv1_client_method());
                 if (!ctx) 
@@ -357,14 +357,14 @@ static int openssl_thread_LWIP_CONNECTION(TLS_IO_INSTANCE* tls_io_instance)
                                 int retry = 0;
                                 while (SSL_connect(ssl) != 0 && retry < MAX_RETRY)
                                 {  
-                                    FD_ZERO(&readset);
-                                    FD_SET(sock, &readset);
-                                    FD_ZERO(&writeset);
-                                    FD_SET(sock, &writeset);
-                                    FD_ZERO(&errset);
-                                    FD_SET(sock, &errset);
+                                    //FD_ZERO(&readset);
+                                    //FD_SET(sock, &readset);
+                                    //FD_ZERO(&writeset);
+                                    //FD_SET(sock, &writeset);
+                                    //FD_ZERO(&errset);
+                                    //FD_SET(sock, &errset);
 
-                                    lwip_select(sock + 1, &readset, &writeset, &errset, NULL);
+                                    //lwip_select(sock + 1, &readset, &writeset, &errset, NULL);
 
                                     retry++;
                                     ThreadAPI_Sleep(RETRY_DELAY);
