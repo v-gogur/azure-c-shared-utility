@@ -216,7 +216,7 @@ static int openssl_thread_LWIP_CONNECTION(TLS_IO_INSTANCE* tls_io_instance)
     {
         tls_io_instance->sock = sock;
 
-        LogInfo("set socket keep-alive ");
+        LogInfo("set socket keep-alive");
         int keepAlive = 1; //enable keepalive
         int keepIdle = 20; //20s
         int keepInterval = 2; //2s
@@ -228,7 +228,13 @@ static int openssl_thread_LWIP_CONNECTION(TLS_IO_INSTANCE* tls_io_instance)
         ret = ret || setsockopt(sock, IPPROTO_TCP, TCP_KEEPINTVL, (void *)&keepInterval, sizeof(keepInterval));
         ret = ret || setsockopt(sock, IPPROTO_TCP, TCP_KEEPCNT, (void *)&keepCount, sizeof(keepCount));
 
-        if (ret != 0) {
+        // NB: On full-sized (multi-process) systems it would be necessary to use the SO_REUSEADDR option to 
+        // grab the socket from any earlier (dying) invocations of the process and then deal with any 
+        // residual junk in the connection stream. This doesn't happen with embedded, so it doesn't need
+        // to be defended against.
+
+        if (ret != 0) 
+        {
             result = __LINE__;
             LogError("set socket keep-alive failed, ret = %d ", ret);
             return result;
