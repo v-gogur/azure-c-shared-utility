@@ -279,7 +279,8 @@ static int openssl_thread_LWIP_CONNECTION(TLS_IO_INSTANCE* tls_io_instance)
             {
                 int retry = 0;
 
-                while (retry < MAX_RETRY){
+                while (retry < MAX_RETRY)
+                {
                     FD_ZERO(&readset);
                     FD_SET(sock, &readset);
                 
@@ -290,16 +291,20 @@ static int openssl_thread_LWIP_CONNECTION(TLS_IO_INSTANCE* tls_io_instance)
                     FD_SET(sock, &errset);
                 
                     ret = lwip_select(sock + 1, &readset, &writeset, &errset, NULL);
-					if (ret <= 0) {
+					if (ret <= 0) 
+                    {
 						result = __LINE__;
-						LogError("select failed: %d", lwip_net_errno(sock));
+						LogError("select failed: %d", get_socket_errno(sock));
 					}
-                    if (ret > 0){
-                        if (FD_ISSET(sock, &writeset)){
+                    if (ret > 0)
+                    {
+                        if (FD_ISSET(sock, &writeset))
+                        {
                           break;
                         }
                 
-                        if (FD_ISSET(sock, &readset)){
+                        if (FD_ISSET(sock, &readset))
+                        {
                             break;
                         }
                     }
@@ -309,21 +314,24 @@ static int openssl_thread_LWIP_CONNECTION(TLS_IO_INSTANCE* tls_io_instance)
                 }
 
                 ctx = SSL_CTX_new(TLSv1_client_method());
-                if (!ctx) {
+                if (!ctx) 
+                {
                     result = __LINE__;
                     LogError("create new SSL CTX failed");
                 }
                 else
                 {
                     ret = SSL_set_fragment(ctx, OPENSSL_FRAGMENT_SIZE);
-                    if (ret != 0){
+                    if (ret != 0)
+                    {
                         result = __LINE__;
                         LogError("SSL_set_fragment failed");
                     }
                     else
                     {
                         ssl = SSL_new(ctx);
-                        if (!ssl) {
+                        if (!ssl) 
+                        {
                             result = __LINE__;
                             LogError("create ssl failed");
                         }
@@ -332,7 +340,8 @@ static int openssl_thread_LWIP_CONNECTION(TLS_IO_INSTANCE* tls_io_instance)
                             // returns 1 on success
                             ret = SSL_set_fd(ssl, sock);
                             //(void*)printf("SSL_set_fd ret:%d \n", ret);
-                            if (ret != 1){
+                            if (ret != 1)
+                            {
                                 result = __LINE__;
                                 LogError("SSL_set_fd failed");
                             }
@@ -359,7 +368,9 @@ static int openssl_thread_LWIP_CONNECTION(TLS_IO_INSTANCE* tls_io_instance)
                                     result = __LINE__;
                                     LogError("SSL_connect failed \n");
                                     printf("SSL_connect failed \n");
-                                }else{
+                                }
+                                else
+                                {
                                     tls_io_instance->ssl = ssl;
                                     tls_io_instance->ssl_context = ctx;
                                     result = 0;
