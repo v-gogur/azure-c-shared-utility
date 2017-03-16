@@ -89,8 +89,8 @@ int SSL_set_fragment(SSL_CTX *ctx, unsigned int frag)
 {
     if (frag < SSL_MIN_FRAG_LEN || frag > SSL_MAX_FRAG_LEN)
     {
-    	printf("error! too long fragment.\n");
-    	return -1;
+        printf("error! too long fragment.\n");
+        return -1;
     }
     else
     {
@@ -141,42 +141,42 @@ static int get_socket_errno(int fd)
 
 static uint32_t get_ipv4(const char* hostname)
 {
-	struct addrinfo *addrInfo = NULL;
-	struct addrinfo *ptr = NULL;
-	struct addrinfo hints;
+    struct addrinfo *addrInfo = NULL;
+    struct addrinfo *ptr = NULL;
+    struct addrinfo hints;
 
-	uint32_t result = 0;
+    uint32_t result = 0;
 
-	//--------------------------------
-	// Setup the hints address info structure
-	// which is passed to the getaddrinfo() function
-	memset(&hints, 0, sizeof(hints));
-	hints.ai_family = AF_INET;
-	hints.ai_socktype = SOCK_STREAM;
-	hints.ai_protocol = IPPROTO_TCP;
+    //--------------------------------
+    // Setup the hints address info structure
+    // which is passed to the getaddrinfo() function
+    memset(&hints, 0, sizeof(hints));
+    hints.ai_family = AF_INET;
+    hints.ai_socktype = SOCK_STREAM;
+    hints.ai_protocol = IPPROTO_TCP;
 
-	//--------------------------------
-	// Call getaddrinfo(). If the call succeeds,
-	// the result variable will hold a linked list
-	// of addrinfo structures containing response
-	// information
-	int getAddrResult = getaddrinfo(hostname, NULL, &hints, &addrInfo);
-	if (getAddrResult == 0)
-	{
-		// If we find the AF_INET address, use it as the return value
-		for (ptr = addrInfo; ptr != NULL; ptr = ptr->ai_next)
-		{
-			switch (ptr->ai_family)
-			{
-			case AF_INET:
-				result = EXTRACT_IPV4(ptr);
-				break;
-			}
-		}
-		freeaddrinfo(addrInfo);
-	}
+    //--------------------------------
+    // Call getaddrinfo(). If the call succeeds,
+    // the result variable will hold a linked list
+    // of addrinfo structures containing response
+    // information
+    int getAddrResult = getaddrinfo(hostname, NULL, &hints, &addrInfo);
+    if (getAddrResult == 0)
+    {
+        // If we find the AF_INET address, use it as the return value
+        for (ptr = addrInfo; ptr != NULL; ptr = ptr->ai_next)
+        {
+            switch (ptr->ai_family)
+            {
+            case AF_INET:
+                result = EXTRACT_IPV4(ptr);
+                break;
+            }
+        }
+        freeaddrinfo(addrInfo);
+    }
 
-	return result;
+    return result;
 }
 
 
@@ -196,13 +196,13 @@ static int openssl_thread_LWIP_CONNECTION(TLS_IO_INSTANCE* tls_io_instance)
 
     LogInfo("OpenSSL thread start...");
 
-	uint32_t ipV4address = get_ipv4(tls_io_instance->hostname);
+    uint32_t ipV4address = get_ipv4(tls_io_instance->hostname);
 
-	if (ipV4address == 0)
-	{
-		// TODO: Get rid of this return in the middle (roy)
-		return -1;
-	}
+    if (ipV4address == 0)
+    {
+        // TODO: Get rid of this return in the middle (roy)
+        return -1;
+    }
 
 
 
@@ -216,42 +216,42 @@ static int openssl_thread_LWIP_CONNECTION(TLS_IO_INSTANCE* tls_io_instance)
     {
         tls_io_instance->sock = sock;
 
-		LogInfo("set socket keep-alive ");
-		int keepAlive = 1; //enable keepalive
-		int keepIdle = 20; //20s
-		int keepInterval = 2; //2s
-		int keepCount = 3; //retry # of times
+        LogInfo("set socket keep-alive ");
+        int keepAlive = 1; //enable keepalive
+        int keepIdle = 20; //20s
+        int keepInterval = 2; //2s
+        int keepCount = 3; //retry # of times
 
-		ret = 0;
-		ret = ret || setsockopt(sock, SOL_SOCKET, SO_KEEPALIVE, (void *)&keepAlive, sizeof(keepAlive));
-		ret = ret || setsockopt(sock, IPPROTO_TCP, TCP_KEEPIDLE, (void *)&keepIdle, sizeof(keepIdle));
-		ret = ret || setsockopt(sock, IPPROTO_TCP, TCP_KEEPINTVL, (void *)&keepInterval, sizeof(keepInterval));
-		ret = ret || setsockopt(sock, IPPROTO_TCP, TCP_KEEPCNT, (void *)&keepCount, sizeof(keepCount));
+        ret = 0;
+        ret = ret || setsockopt(sock, SOL_SOCKET, SO_KEEPALIVE, (void *)&keepAlive, sizeof(keepAlive));
+        ret = ret || setsockopt(sock, IPPROTO_TCP, TCP_KEEPIDLE, (void *)&keepIdle, sizeof(keepIdle));
+        ret = ret || setsockopt(sock, IPPROTO_TCP, TCP_KEEPINTVL, (void *)&keepInterval, sizeof(keepInterval));
+        ret = ret || setsockopt(sock, IPPROTO_TCP, TCP_KEEPCNT, (void *)&keepCount, sizeof(keepCount));
 
-		if (ret != 0) {
-			result = __LINE__;
-			LogError("set socket keep-alive failed, ret = %d ", ret);
-			return result;
-			// TODO: fix this return in the middle
-		}
-		else
-		{
-			LogInfo("set socket keep-alive OK");
-		}
+        if (ret != 0) {
+            result = __LINE__;
+            LogError("set socket keep-alive failed, ret = %d ", ret);
+            return result;
+            // TODO: fix this return in the middle
+        }
+        else
+        {
+            LogInfo("set socket keep-alive OK");
+        }
 
-		// When supplied with either F_GETFL and F_SETFL parameters, the fcntl function
-		// does simple bit flips which have no error path, so it is not necessary to
-		// check for errors. (Source checked for linux and lwIP).
-		int originalFlags = fcntl(sock, F_GETFL, 0);
-		(void)fcntl(sock, F_SETFL, originalFlags | O_NONBLOCK);
+        // When supplied with either F_GETFL and F_SETFL parameters, the fcntl function
+        // does simple bit flips which have no error path, so it is not necessary to
+        // check for errors. (Source checked for linux and lwIP).
+        int originalFlags = fcntl(sock, F_GETFL, 0);
+        (void)fcntl(sock, F_SETFL, originalFlags | O_NONBLOCK);
 
 
-		memset(&sock_addr, 0, sizeof(sock_addr));
-		sock_addr.sin_family = AF_INET;
-		sock_addr.sin_addr.s_addr = 0;
-		sock_addr.sin_port = 0; // random local port
+        memset(&sock_addr, 0, sizeof(sock_addr));
+        sock_addr.sin_family = AF_INET;
+        sock_addr.sin_addr.s_addr = 0;
+        sock_addr.sin_port = 0; // random local port
 
-		ret = bind(sock, (struct sockaddr*)&sock_addr, sizeof(sock_addr));
+        ret = bind(sock, (struct sockaddr*)&sock_addr, sizeof(sock_addr));
         
         if (ret) {
             result = __LINE__;
@@ -259,12 +259,12 @@ static int openssl_thread_LWIP_CONNECTION(TLS_IO_INSTANCE* tls_io_instance)
         }
         else
         {
-			memset(&sock_addr, 0, sizeof(sock_addr));
-			sock_addr.sin_family = AF_INET;
-			sock_addr.sin_addr.s_addr = ipV4address;
-			sock_addr.sin_port = htons(tls_io_instance->port);
+            memset(&sock_addr, 0, sizeof(sock_addr));
+            sock_addr.sin_family = AF_INET;
+            sock_addr.sin_addr.s_addr = ipV4address;
+            sock_addr.sin_port = htons(tls_io_instance->port);
 
-			ret = connect(sock, (struct sockaddr*)&sock_addr, sizeof(sock_addr));
+            ret = connect(sock, (struct sockaddr*)&sock_addr, sizeof(sock_addr));
             if (ret == -1) {
                 ret = get_socket_errno(sock);
                 if (ret != EINPROGRESS){
@@ -291,11 +291,11 @@ static int openssl_thread_LWIP_CONNECTION(TLS_IO_INSTANCE* tls_io_instance)
                     FD_SET(sock, &errset);
                 
                     ret = lwip_select(sock + 1, &readset, &writeset, &errset, NULL);
-					if (ret <= 0) 
+                    if (ret <= 0) 
                     {
-						result = __LINE__;
-						LogError("select failed: %d", get_socket_errno(sock));
-					}
+                        result = __LINE__;
+                        LogError("select failed: %d", get_socket_errno(sock));
+                    }
                     if (ret > 0)
                     {
                         if (FD_ISSET(sock, &writeset))
@@ -310,7 +310,7 @@ static int openssl_thread_LWIP_CONNECTION(TLS_IO_INSTANCE* tls_io_instance)
                     }
 
                     retry++;
-					ThreadAPI_Sleep(RETRY_DELAY);
+                    ThreadAPI_Sleep(RETRY_DELAY);
                 }
 
                 ctx = SSL_CTX_new(TLSv1_client_method());
@@ -347,7 +347,7 @@ static int openssl_thread_LWIP_CONNECTION(TLS_IO_INSTANCE* tls_io_instance)
                             }
                             else{
                                 // LogInfo("SSL connect... ");
-                            	printf("SSL connect... \n");
+                                printf("SSL connect... \n");
                                 int retry = 0;
                                 while (SSL_connect(ssl) != 0 && retry < MAX_RETRY)
                                 {  
@@ -361,7 +361,7 @@ static int openssl_thread_LWIP_CONNECTION(TLS_IO_INSTANCE* tls_io_instance)
                                     lwip_select(sock + 1, &readset, &writeset, &errset, NULL);
 
                                     retry++;
-									ThreadAPI_Sleep(RETRY_DELAY);
+                                    ThreadAPI_Sleep(RETRY_DELAY);
                                 }
                                 if (retry >= MAX_RETRY)
                                 {
@@ -683,10 +683,10 @@ int tlsio_openssl_send(CONCRETE_IO_HANDLE tls_io, const void* buffer, size_t siz
                     retry++;
                 }
                 //vTaskDelay(5);
-				// TODO: If this sleep is 5 msec then the device goes into an infinite
-				// loop of failure. That is very wrong, and probably indicates a need
-				// for redesign. Loop timing should be mere optimization. (roy)
-				ThreadAPI_Sleep(50);
+                // TODO: If this sleep is 5 msec then the device goes into an infinite
+                // loop of failure. That is very wrong, and probably indicates a need
+                // for redesign. Loop timing should be mere optimization. (roy)
+                ThreadAPI_Sleep(50);
             }
 
             if (retry >= MAX_RETRY_WRITE)
