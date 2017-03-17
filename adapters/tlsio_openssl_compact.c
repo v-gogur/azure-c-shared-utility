@@ -6,21 +6,6 @@
 #include <crtdbg.h>
 #endif
 
-//#include "openssl/ssl_compat-1.0.h"
-//#include "../../../../openssl/include/internal/ssl_types.h"
-//#include "ssl_pm.h"
-//#include "ssl_opt.h"
-#include "lwip/opt.h"
-#include "lwip/sockets.h"
-#include "lwip/sys.h"
-#include "lwip/dns.h"
-#include "lwip/err.h"
-#include "lwip/mem.h"
-#include "lwip/memp.h"
-#include "lwip/ip_addr.h"
-#include "lwip/api.h"
-#include "lwip/netdb.h"
-//#include "openssl_client.h"
 #include "openssl/ssl.h"
 
 #include <stdio.h>
@@ -78,6 +63,8 @@ typedef struct TLS_IO_INSTANCE_TAG
 	const char* x509privatekey;
 	int sock;
 } TLS_IO_INSTANCE;
+
+static TLS_IO_INSTANCE tlsio_static_instance;
 
 
 
@@ -285,7 +272,11 @@ static void destroy_openssl_instance(TLS_IO_INSTANCE* tls_io_instance)
 			SSL_CTX_free(tls_io_instance->ssl_context);
 			tls_io_instance->ssl_context = NULL;
 		}
-		close(tls_io_instance->sock);
+        if (tls_io_instance->sock < 0)
+        {
+            SSL_Socket_Close(tls_io_instance->sock);
+            tls_io_instance->sock = -1;
+        }
 	}
 }
 
@@ -303,40 +294,42 @@ CONCRETE_IO_HANDLE tlsio_openssl_create(void* io_create_parameters)
 	}
 	else
 	{
-		/* Codes_SRS_TEMPLATE_99_004: [ The tlsio_openssl_create shall return NULL when malloc fails. ]*/
-		result = (TLS_IO_INSTANCE*)malloc(sizeof(TLS_IO_INSTANCE));
-		// LogInfo("result is 0x%x", result);
+        result = &tlsio_static_instance;
 
-		if (result == NULL)
-		{
-			LogError("Failed allocating TLSIO instance.");
-		}
-		else
-		{
-			memset(result, 0, sizeof(TLS_IO_INSTANCE));
-			mallocAndStrcpy_s(&result->hostname, tls_io_config->hostname);
-			result->port = tls_io_config->port;
-			result->ssl_context = NULL;
-			result->ssl = NULL;
-			result->certificate = NULL;
+		memset(result, 0, sizeof(TLS_IO_INSTANCE));
+		int ret = mallocAndStrcpy_s(&result->hostname, tls_io_config->hostname);
+        if (ret != 0)
+        {
+            // Errors already logged (and very unlikely) so no further logging here
+            result = NULL;
+        }
+        else
+        {
+            result->port = tls_io_config->port;
 
-			result->on_bytes_received = NULL;
-			result->on_bytes_received_context = NULL;
+            result->sock = -1;
 
-			result->on_io_open_complete = NULL;
-			result->on_io_open_complete_context = NULL;
+            result->ssl_context = NULL;
+            result->ssl = NULL;
+            result->certificate = NULL;
 
-			result->on_io_close_complete = NULL;
-			result->on_io_close_complete_context = NULL;
+            result->on_bytes_received = NULL;
+            result->on_bytes_received_context = NULL;
 
-			result->on_io_error = NULL;
-			result->on_io_error_context = NULL;
+            result->on_io_open_complete = NULL;
+            result->on_io_open_complete_context = NULL;
 
-			result->tlsio_state = TLSIO_STATE_NOT_OPEN;
+            result->on_io_close_complete = NULL;
+            result->on_io_close_complete_context = NULL;
 
-			result->x509certificate = NULL;
-			result->x509privatekey = NULL;
-		}
+            result->on_io_error = NULL;
+            result->on_io_error_context = NULL;
+
+            result->tlsio_state = TLSIO_STATE_NOT_OPEN;
+
+            result->x509certificate = NULL;
+            result->x509privatekey = NULL;
+        }
 	}
 
 	return (CONCRETE_IO_HANDLE)result;
@@ -356,20 +349,23 @@ void tlsio_openssl_destroy(CONCRETE_IO_HANDLE tls_io)
 		if (tls_io_instance->certificate != NULL)
 		{
 			free(tls_io_instance->certificate);
+            tls_io_instance->certificate = NULL;
 		}
 		if (tls_io_instance->hostname != NULL)
 		{
 			free(tls_io_instance->hostname);
-		}
+            tls_io_instance->hostname = NULL;
+        }
 		if (tls_io_instance->x509certificate != NULL)
 		{
 			free((void*)tls_io_instance->x509certificate);
-		}
+            tls_io_instance->x509certificate = NULL;
+        }
 		if (tls_io_instance->x509privatekey != NULL)
 		{
 			free((void*)tls_io_instance->x509privatekey);
-		}
-		free(tls_io);
+            tls_io_instance->x509privatekey = NULL;
+        }
 	}
 }
 
