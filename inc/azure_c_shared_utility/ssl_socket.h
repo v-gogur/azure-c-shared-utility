@@ -21,19 +21,19 @@ extern "C" {
 	*
 	* @param   serverName	The url of the SSL server to be contacted.
 	*
-	* @return	@c A non-zero integer file descriptor (fd) if the API call
-	*          is successful or 0 in case it fails. Error logging is
+	* @return	@c An integer file descriptor (fd) if the API call
+	*          is successful or -1 in case it fails. Error logging is
 	*          performed by the underlying concrete implementation, so no
 	*          further error logging is necessary.
 	*/
-	MOCKABLE_FUNCTION(, int, SSL_Socket_Create, const char*, serverName);
+	MOCKABLE_FUNCTION(, int, SSL_Socket_Create, const char*, serverName, int, port);
 
 	/**
 	* @brief	Close the socket returned by SSL_Socket_Create.
 	*
 	* @param   serverName	The url of the SSL server to be contacted.
 	*/
-	MOCKABLE_FUNCTION(, void, SSL_Socket_Close, int, socket);
+	MOCKABLE_FUNCTION(, void, SSL_Socket_Close, int, sock);
 
 
 #ifdef __cplusplus
