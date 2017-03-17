@@ -213,18 +213,6 @@ static int openssl_thread_LWIP_CONNECTION(TLS_IO_INSTANCE* tls_io_instance)
 	return result;
 }
 
-//If the underlying BIO is non - blocking, SSL_connect() will also 
-//return when the underlying BIO could not satisfy the needs of 
-//SSL_connect() to continue the handshake, indicating the 
-//problem by the return value - 1. In this case a call to 
-//SSL_get_error() with the return value of SSL_connect() will 
-//yield SSL_ERROR_WANT_READ or SSL_ERROR_WANT_WRITE.The calling 
-//process then must repeat the call after taking appropriate 
-//action to satisfy the needs of SSL_connect().The action 
-//depends on the underlying BIO.When using a non - blocking 
-//socket, nothing is to be done, but select() can be used to 
-//check for the required condition.
-
 static int send_handshake_bytes(TLS_IO_INSTANCE* tls_io_instance)
 {
 	//system_print_meminfo(); // This is useful for debugging purpose.
