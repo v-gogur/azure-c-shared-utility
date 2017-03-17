@@ -1,10 +1,11 @@
 // Copyright (c) Microsoft. All rights reserved.
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
-//#if USE_LWIP_SOCKET
+// Enable platform-specific socket.h files using preprocessor defines in the makefile
+#ifdef USE_LWIP_SOCKET_FOR_AZURE_IOT
 #include "lwip/sockets.h"
 #include "lwip/netdb.h"
-//#endif
+#endif
 
 #include "azure_c_shared_utility/ssl_socket.h"
 #include "azure_c_shared_utility/xlogging.h"
