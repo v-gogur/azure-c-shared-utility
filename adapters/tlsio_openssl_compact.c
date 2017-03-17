@@ -133,7 +133,6 @@ static int openssl_thread_LWIP_CONNECTION(TLS_IO_INSTANCE* tls_io_instance)
 	LogInfo("OpenSSL thread start...");
 
 
-	LogInfo("create socket ......");
 	sock = SSL_Socket_Create(tls_io_instance->hostname, tls_io_instance->port);
 	if (sock < 0) {
 		result = __LINE__;
@@ -220,7 +219,25 @@ static int send_handshake_bytes(TLS_IO_INSTANCE* tls_io_instance)
 	int result;
 	if (openssl_thread_LWIP_CONNECTION(tls_io_instance) != 0) {
 		result = __LINE__;
-	}
+
+    
+    
+    
+        // TODO: make sure the following thing happens somewhere appropriate if thread start fails
+    
+        //if (result != 0) {
+        //    tls_io_instance->tlsio_state = TLSIO_STATE_ERROR;
+        //}
+        //return result;
+
+    
+    
+    
+    
+    
+    
+    
+    }
 	else {
 		tls_io_instance->tlsio_state = TLSIO_STATE_OPEN;
 		indicate_open_complete(tls_io_instance, IO_OPEN_OK);
