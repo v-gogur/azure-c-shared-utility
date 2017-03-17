@@ -68,6 +68,29 @@ static TLS_IO_INSTANCE tlsio_static_instance;
 #define SSL_DEFAULT_FRAG_LEN                2048
 
 
+static void destroy_openssl_connection_members(TLS_IO_INSTANCE* tls_io_instance)
+{
+    if (tls_io_instance != NULL)
+    {
+        if (tls_io_instance->ssl != NULL)
+        {
+            SSL_free(tls_io_instance->ssl);
+            tls_io_instance->ssl = NULL;
+        }
+        if (tls_io_instance->ssl_context != NULL)
+        {
+            SSL_CTX_free(tls_io_instance->ssl_context);
+            tls_io_instance->ssl_context = NULL;
+        }
+        if (tls_io_instance->sock < 0)
+        {
+            SSL_Socket_Close(tls_io_instance->sock);
+            tls_io_instance->sock = -1;
+        }
+    }
+}
+
+
 /* Codes_SRS_TLSIO_SSL_ESP8266_99_001: [ The tlsio_openssl_retrieveoptions shall not do anything, and return NULL. ]*/
 static OPTIONHANDLER_HANDLE tlsio_openssl_retrieveoptions(CONCRETE_IO_HANDLE handle)
 {
@@ -101,13 +124,10 @@ static void indicate_open_complete(TLS_IO_INSTANCE* tls_io_instance, IO_OPEN_RES
 }
 
 
-static int openssl_thread_LWIP_CONNECTION(TLS_IO_INSTANCE* tls_io_instance)
+static int create_and_connect_ssl(TLS_IO_INSTANCE* tls_io_instance)
 {
 	int result;
 	int ret;
-	int sock;
-
-	//struct sockaddr_in sock_addr;
 
 	SSL_CTX *ctx;
 	SSL *ssl;
@@ -115,12 +135,15 @@ static int openssl_thread_LWIP_CONNECTION(TLS_IO_INSTANCE* tls_io_instance)
 	LogInfo("OpenSSL thread start...");
 
 
-	sock = SSL_Socket_Create(tls_io_instance->hostname, tls_io_instance->port);
+	int sock = SSL_Socket_Create(tls_io_instance->hostname, tls_io_instance->port);
 	if (sock < 0) {
+        // Error logging already happened
 		result = __LINE__;
 	}
 	else
 	{
+        // At this point the tls_io_instance "owns" the socket, 
+        // so destroy_openssl_instance must be called if the socket needs to be closed
 		tls_io_instance->sock = sock;
 
 		ctx = SSL_CTX_new(TLSv1_2_client_method());
@@ -148,8 +171,8 @@ static int openssl_thread_LWIP_CONNECTION(TLS_IO_INSTANCE* tls_io_instance)
 					result = __LINE__;
 					LogError("SSL_set_fd failed");
 				}
-				else {
-					LogInfo("SSL connect... ");
+				else 
+                {
 					int retry = 0;
 					while (SSL_connect(ssl) != 0 && retry < MAX_RETRY)
 					{
@@ -187,6 +210,11 @@ static int openssl_thread_LWIP_CONNECTION(TLS_IO_INSTANCE* tls_io_instance)
 			}
 		}
 	}
+
+    if (result != 0)
+    {
+        destroy_openssl_connection_members(tls_io_instance);
+    }
 	return result;
 }
 
@@ -195,28 +223,12 @@ static int send_handshake_bytes(TLS_IO_INSTANCE* tls_io_instance)
 	//system_print_meminfo(); // This is useful for debugging purpose.
 	//LogInfo("free heap size %d", system_get_free_heap_size()); // This is useful for debugging purpose.
 	int result;
-	if (openssl_thread_LWIP_CONNECTION(tls_io_instance) != 0) {
+	if (create_and_connect_ssl(tls_io_instance) != 0) 
+    {
 		result = __LINE__;
-
-    
-    
-    
-        // TODO: make sure the following thing happens somewhere appropriate if thread start fails
-    
-        //if (result != 0) {
-        //    tls_io_instance->tlsio_state = TLSIO_STATE_ERROR;
-        //}
-        //return result;
-
-    
-    
-    
-    
-    
-    
-    
     }
-	else {
+	else 
+    {
 		tls_io_instance->tlsio_state = TLSIO_STATE_OPEN;
 		indicate_open_complete(tls_io_instance, IO_OPEN_OK);
 		result = 0;
@@ -247,28 +259,6 @@ static int decode_ssl_received_bytes(TLS_IO_INSTANCE* tls_io_instance)
 	}
 	result = 0;
 	return result;
-}
-
-static void destroy_openssl_instance(TLS_IO_INSTANCE* tls_io_instance)
-{
-	if (tls_io_instance != NULL)
-	{
-		if (tls_io_instance->ssl != NULL)
-		{
-			SSL_free(tls_io_instance->ssl);
-			tls_io_instance->ssl = NULL;
-		}
-		if (tls_io_instance->ssl_context != NULL)
-		{
-			SSL_CTX_free(tls_io_instance->ssl_context);
-			tls_io_instance->ssl_context = NULL;
-		}
-        if (tls_io_instance->sock < 0)
-        {
-            SSL_Socket_Close(tls_io_instance->sock);
-            tls_io_instance->sock = -1;
-        }
-	}
 }
 
 /* Codes_SRS_TLSIO_SSL_ESP8266_99_005: [ The tlsio_openssl_create succeed. ]*/
@@ -454,7 +444,7 @@ int tlsio_openssl_close(CONCRETE_IO_HANDLE tls_io, ON_IO_CLOSE_COMPLETE on_io_cl
 			tls_io_instance->on_io_close_complete_context = callback_context;
 
 			(void)SSL_shutdown(tls_io_instance->ssl);
-			destroy_openssl_instance(tls_io_instance);
+            destroy_openssl_connection_members(tls_io_instance);
 			tls_io_instance->tlsio_state = TLSIO_STATE_NOT_OPEN;
 			result = 0;
 			if (tls_io_instance->on_io_close_complete != NULL)
