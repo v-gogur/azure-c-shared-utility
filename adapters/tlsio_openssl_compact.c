@@ -19,19 +19,14 @@
 #include "azure_c_shared_utility/threadapi.h"
 #include "azure_c_shared_utility/ssl_socket.h"
 
-#define OPENSSL_FRAGMENT_SIZE 5120
+#ifndef OPENSSL_DEFAULT_READ_BUFFER_SIZE
+    #define OPENSSL_DEFAULT_READ_BUFFER_SIZE 5120
+#endif // OPENSSL_DEFAULT_READ_BUFFER_SIZE
+
 #define OPENSSL_LOCAL_TCP_PORT 1000
 #define MAX_RETRY 20
 #define MAX_RETRY_WRITE 500
 #define RETRY_DELAY 1000
-
-// The EXTRACT_IPV4 may have to be redefined for different systems to extract the uint32_t AF_INET address
-#ifdef _INC_WINAPIFAMILY	// An example WinSock test; feel free to change to a better one to compile under Windows
-#define EXTRACT_IPV4(ptr) ((struct sockaddr_in *) ptr->ai_addr)->sin_addr.S_un.S_addr
-#else
-// The default definition handles lwIP. Please add comments for other systems tested.
-#define EXTRACT_IPV4(ptr) ((struct sockaddr_in *) ptr->ai_addr)->sin_addr.s_addr
-#endif
 
 
 typedef enum TLSIO_STATE_TAG
@@ -144,8 +139,7 @@ static int openssl_thread_LWIP_CONNECTION(TLS_IO_INSTANCE* tls_io_instance)
 			}
 			else
 			{
-				// TODO: Understand the default fragment size, perhaps make it configurable
-				// SSL_CTX_set_default_read_buffer_len(ctx, OPENSSL_FRAGMENT_SIZE);
+				SSL_CTX_set_default_read_buffer_len(ctx, OPENSSL_DEFAULT_READ_BUFFER_SIZE);
 
 				// returns 1 on success
 				ret = SSL_set_fd(ssl, sock);
@@ -155,8 +149,7 @@ static int openssl_thread_LWIP_CONNECTION(TLS_IO_INSTANCE* tls_io_instance)
 					LogError("SSL_set_fd failed");
 				}
 				else {
-					// LogInfo("SSL connect... ");
-					printf("SSL connect... \n");
+					LogInfo("SSL connect... ");
 					int retry = 0;
 					while (SSL_connect(ssl) != 0 && retry < MAX_RETRY)
 					{
@@ -183,14 +176,12 @@ static int openssl_thread_LWIP_CONNECTION(TLS_IO_INSTANCE* tls_io_instance)
 					{
 						result = __LINE__;
 						LogError("SSL_connect failed \n");
-						printf("SSL_connect failed \n");
 					}
 					else
 					{
 						tls_io_instance->ssl = ssl;
 						tls_io_instance->ssl_context = ctx;
 						result = 0;
-						printf("SSL_connect succeed");
 					}
 				}
 			}
@@ -463,7 +454,6 @@ int tlsio_openssl_close(CONCRETE_IO_HANDLE tls_io, ON_IO_CLOSE_COMPLETE on_io_cl
 			tls_io_instance->on_io_close_complete_context = callback_context;
 
 			(void)SSL_shutdown(tls_io_instance->ssl);
-			//(void*)printf("SSL_shutdown ret: %d \n", ret);
 			destroy_openssl_instance(tls_io_instance);
 			tls_io_instance->tlsio_state = TLSIO_STATE_NOT_OPEN;
 			result = 0;
@@ -513,8 +503,8 @@ int tlsio_openssl_send(CONCRETE_IO_HANDLE tls_io, const void* buffer, size_t siz
 				/* Codes_SRS_TLSIO_SSL_ESP8266_99_017: [ The tlsio_openssl_send SSL_write failure]*/
 				res = SSL_write(tls_io_instance->ssl, ((uint8_t*)buffer) + total_write, size);
 
-				//printf("SSL_write res: %d, size: %d, retry: %d", res, size, retry);
-			   // printf("SSL_write res:%d size:%d retry:%d\n",res,size,retry);
+				//LogInfo("SSL_write res: %d, size: %d, retry: %d", res, size, retry);
+			   // LogInfo("SSL_write res:%d size:%d retry:%d\n",res,size,retry);
 
 				if (res > 0) {
 					total_write += res;
