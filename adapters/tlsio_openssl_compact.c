@@ -10,10 +10,7 @@
 
 #include <stdio.h>
 #include <stdbool.h>
-#include "azure_c_shared_utility/lock.h"
 #include "azure_c_shared_utility/tlsio.h"
-#include "azure_c_shared_utility/tlsio_openssl.h"
-#include "azure_c_shared_utility/socketio.h"
 #include "azure_c_shared_utility/xlogging.h"
 #include "azure_c_shared_utility/crt_abstractions.h"
 #include "azure_c_shared_utility/threadapi.h"
@@ -97,18 +94,6 @@ static OPTIONHANDLER_HANDLE tlsio_openssl_retrieveoptions(CONCRETE_IO_HANDLE han
 	OPTIONHANDLER_HANDLE result = NULL;
 	return result;
 }
-
-static const IO_INTERFACE_DESCRIPTION tlsio_openssl_interface_description =
-{
-	tlsio_openssl_retrieveoptions,
-	tlsio_openssl_create,
-	tlsio_openssl_destroy,
-	tlsio_openssl_open,
-	tlsio_openssl_close,
-	tlsio_openssl_send,
-	tlsio_openssl_dowork,
-	tlsio_openssl_setoption
-};
 
 
 static void indicate_open_complete(TLS_IO_INSTANCE* tls_io_instance, IO_OPEN_RESULT open_result)
@@ -561,6 +546,18 @@ int tlsio_openssl_setoption(CONCRETE_IO_HANDLE tls_io, const char* optionName, c
 {
 	return 0;
 }
+
+static const IO_INTERFACE_DESCRIPTION tlsio_openssl_interface_description =
+{
+    tlsio_openssl_retrieveoptions,
+    tlsio_openssl_create,
+    tlsio_openssl_destroy,
+    tlsio_openssl_open,
+    tlsio_openssl_close,
+    tlsio_openssl_send,
+    tlsio_openssl_dowork,
+    tlsio_openssl_setoption
+};
 
 const IO_INTERFACE_DESCRIPTION* tlsio_openssl_get_interface_description(void)
 {
