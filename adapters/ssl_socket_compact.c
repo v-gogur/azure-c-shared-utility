@@ -7,12 +7,18 @@
 #include "lwip/netdb.h"
 #endif
 
+#ifdef LINUX
+#include <sys/types.h>          /* See NOTES */
+#include <sys/socket.h>
+#endif // LINUX
+
+
 #include "azure_c_shared_utility/ssl_socket.h"
 #include "azure_c_shared_utility/xlogging.h"
 
 
 // EXTRACT_IPV4 pulls the uint32_t IPv4 address out of an addrinfo struct
-#ifdef _INC_WINAPIFAMILY	// An example WinSock test; feel free to change to a better one to compile under Windows
+#ifdef WIN32	
 #define EXTRACT_IPV4(ptr) ((struct sockaddr_in *) ptr->ai_addr)->sin_addr.S_un.S_addr
 #else
 // The default definition handles lwIP. Please add comments for other systems tested.
@@ -25,7 +31,7 @@
 static int get_socket_errno(int fd)
 {
     int sock_errno = 0;
-    u32_t optlen = sizeof(sock_errno);
+    uint32_t optlen = sizeof(sock_errno);
     getsockopt(fd, SOL_SOCKET, SO_ERROR, &sock_errno, &optlen);
     return sock_errno;
 }
