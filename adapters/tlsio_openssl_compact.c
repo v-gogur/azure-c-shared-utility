@@ -93,11 +93,7 @@ static bool is_hard_ssl_error(SSL* ssl, int callReturn)
     if (err != SSL_ERROR_WANT_READ && err != SSL_ERROR_WANT_WRITE)
     {
         result = true;
-        LogInfo("Decoded error from SSL_write or SSL_connect: %d", err);
-    }
-    else
-    {
-        LogInfo("Ignored SSL error: %d", err);
+        //LogInfo("Decoded error from SSL_write or SSL_connect: %d", err);
     }
     return result;
 }
@@ -171,12 +167,11 @@ static int create_and_connect_ssl()
                     bool done = false;
                     while (!done)
                     {
-                        LogError("Calling SSL_connect");
                         int connect_result = SSL_connect(ssl);
 
                         // The manual pages seem to be incorrect. They say that 0 is a failure,
                         // but by experiment, 0 is the success result, at least when using
-                        // SSL_set_fd instead of BIO.
+                        // SSL_set_fd instead of custom BIO.
                         // https://www.openssl.org/docs/man1.0.2/ssl/SSL_connect.html
                         if (connect_result == 1 || connect_result == 0)
                         {
@@ -202,32 +197,8 @@ static int create_and_connect_ssl()
         }
     }
 
-    LogError("create_and_connect_ssl returning %d", result);
     return result;
 }
-
-static int send_handshake_bytes()
-{
-    //system_print_meminfo(); // This is useful for debugging purpose.
-    //LogInfo("free heap size %d", system_get_free_heap_size()); // This is useful for debugging purpose.
-    int result;
-    if (create_and_connect_ssl() != 0)
-    {
-        result = __FAILURE__;
-    }
-    else
-    {
-        tlsio_static_instance.tlsio_state = TLSIO_STATE_OPEN;
-        if (tlsio_static_instance.on_io_open_complete)
-        {
-            tlsio_static_instance.on_io_open_complete(tlsio_static_instance.on_io_open_complete_context, IO_OPEN_OK);
-        }
-        result = 0;
-    }
-
-    return result;
-}
-
 
 static int decode_ssl_received_bytes()
 {
@@ -372,20 +343,24 @@ int tlsio_openssl_open(CONCRETE_IO_HANDLE tls_io,
 
             tls_io_instance->tlsio_state = TLSIO_STATE_OPENING;
 
-            if (send_handshake_bytes(tls_io_instance) != 0)
+            if (create_and_connect_ssl() != 0)
             {
-                result = __FAILURE__;
                 tls_io_instance->tlsio_state = TLSIO_STATE_ERROR;
-                LogError("send_handshake_bytes failed.");
+                LogError("create_and_connect_ssl failed.");
                 if (tls_io_instance->on_io_error != NULL)
                 {
                     tls_io_instance->on_io_error(tls_io_instance->on_io_error_context);
                 }
-            }
+                result = __FAILURE__;
+           }
             else
             {
-                result = 0;
                 tls_io_instance->tlsio_state = TLSIO_STATE_OPEN;
+                if (tls_io_instance->on_io_open_complete)
+                {
+                    tls_io_instance->on_io_open_complete(tls_io_instance->on_io_open_complete_context, IO_OPEN_OK);
+                }
+                result = 0;
             }
         }
     }
