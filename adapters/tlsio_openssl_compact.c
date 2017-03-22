@@ -20,7 +20,6 @@
 #define OPENSSL_DEFAULT_READ_BUFFER_SIZE 5120
 #endif // OPENSSL_DEFAULT_READ_BUFFER_SIZE
 
-#define MAX_RETRY 20
 #define RETRY_DELAY 1000
 
 
@@ -104,9 +103,6 @@ static int create_and_connect_ssl()
     int result = __FAILURE__;
     int ret;
 
-    SSL_CTX *ctx;
-    SSL *ssl;
-
     LogInfo("OpenSSL thread start...");
 
 
@@ -121,28 +117,26 @@ static int create_and_connect_ssl()
         // so destroy_openssl_instance must be called if the socket needs to be closed
         tlsio_static_instance.sock = sock;
 
-        ctx = SSL_CTX_new(TLSv1_2_client_method());
-        if (!ctx)
+        tlsio_static_instance.ssl_context = SSL_CTX_new(TLSv1_2_client_method());
+        if (!tlsio_static_instance.ssl_context)
         {
             result = __FAILURE__;
             LogError("create new SSL CTX failed");
         }
         else
         {
-            tlsio_static_instance.ssl_context = ctx;
-            ssl = SSL_new(ctx);
-            if (!ssl)
+            tlsio_static_instance.ssl = SSL_new(tlsio_static_instance.ssl_context);
+            if (!tlsio_static_instance.ssl)
             {
                 result = __FAILURE__;
                 LogError("SSL_new failed");
             }
             else
             {
-                tlsio_static_instance.ssl = ssl;
-                SSL_CTX_set_default_read_buffer_len(ctx, OPENSSL_DEFAULT_READ_BUFFER_SIZE);
+                SSL_CTX_set_default_read_buffer_len(tlsio_static_instance.ssl_context, OPENSSL_DEFAULT_READ_BUFFER_SIZE);
 
                 // returns 1 on success
-                ret = SSL_set_fd(ssl, sock);
+                ret = SSL_set_fd(tlsio_static_instance.ssl, sock);
                 if (ret != 1)
                 {
                     result = __FAILURE__;
@@ -167,7 +161,7 @@ static int create_and_connect_ssl()
                     bool done = false;
                     while (!done)
                     {
-                        int connect_result = SSL_connect(ssl);
+                        int connect_result = SSL_connect(tlsio_static_instance.ssl);
 
                         // The manual pages seem to be incorrect. They say that 0 is a failure,
                         // but by experiment, 0 is the success result, at least when using
@@ -181,7 +175,7 @@ static int create_and_connect_ssl()
                         }
                         else
                         {
-                            bool hard_error = is_hard_ssl_error(ssl, connect_result);
+                            bool hard_error = is_hard_ssl_error(tlsio_static_instance.ssl, connect_result);
                             if (hard_error)
                             {
                                 // Connect failed, so delete the connection objects
