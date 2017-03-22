@@ -17,7 +17,7 @@
 #include "azure_c_shared_utility/ssl_socket.h"
 
 #ifndef OPENSSL_DEFAULT_READ_BUFFER_SIZE
-    #define OPENSSL_DEFAULT_READ_BUFFER_SIZE 5120
+#define OPENSSL_DEFAULT_READ_BUFFER_SIZE 5120
 #endif // OPENSSL_DEFAULT_READ_BUFFER_SIZE
 
 #define MAX_RETRY 20
@@ -54,17 +54,16 @@ typedef struct TLS_IO_INSTANCE_TAG
     int sock;
 } TLS_IO_INSTANCE;
 
+// This struct is kept as static storage rather than heap storage
+// as an optimization for embedded devices. This reduces heap overhead,
+// avoids heap fragmentation, and eliminates several tests for NULL
+// and their associated error strings.
 static TLS_IO_INSTANCE tlsio_static_instance;
-
-
-
-#define SSL_MIN_FRAG_LEN                    2048
-#define SSL_MAX_FRAG_LEN                    8192
-#define SSL_DEFAULT_FRAG_LEN                2048
 
 
 static void destroy_openssl_connection_members()
 {
+    LogInfo("starting destroy");
     if (tlsio_static_instance.ssl != NULL)
     {
         SSL_free(tlsio_static_instance.ssl);
@@ -80,12 +79,33 @@ static void destroy_openssl_connection_members()
         SSL_Socket_Close(tlsio_static_instance.sock);
         tlsio_static_instance.sock = -1;
     }
+    LogInfo("ending destroy");
+}
+
+// This method tests for hard errors returned from either SSL_write or SSL_connect.
+// Returns 
+//     false for SSL_ERROR_WANT_READ or SSL_ERROR_WANT_WRITE
+//     true for other errors (real failures)
+static bool is_hard_ssl_error(SSL* ssl, int callReturn)
+{
+    bool result = false;
+    int err = SSL_get_error(ssl, callReturn);
+    if (err != SSL_ERROR_WANT_READ && err != SSL_ERROR_WANT_WRITE)
+    {
+        result = true;
+        LogInfo("Decoded error from SSL_write or SSL_connect: %d", err);
+    }
+    else
+    {
+        LogInfo("Ignored SSL error: %d", err);
+    }
+    return result;
 }
 
 
 static int create_and_connect_ssl()
 {
-    int result;
+    int result = __FAILURE__;
     int ret;
 
     SSL_CTX *ctx;
@@ -113,6 +133,7 @@ static int create_and_connect_ssl()
         }
         else
         {
+            tlsio_static_instance.ssl_context = ctx;
             ssl = SSL_new(ctx);
             if (!ssl)
             {
@@ -121,6 +142,7 @@ static int create_and_connect_ssl()
             }
             else
             {
+                tlsio_static_instance.ssl = ssl;
                 SSL_CTX_set_default_read_buffer_len(ctx, OPENSSL_DEFAULT_READ_BUFFER_SIZE);
 
                 // returns 1 on success
@@ -130,50 +152,57 @@ static int create_and_connect_ssl()
                     result = __FAILURE__;
                     LogError("SSL_set_fd failed");
                 }
-                else 
+                else
                 {
-                    int retry = 0;
-                    while (SSL_connect(ssl) != 0 && retry < MAX_RETRY)
+                    // https://www.openssl.org/docs/man1.0.2/ssl/SSL_connect.html
+
+                    // "If the underlying BIO is non - blocking, SSL_connect() will also 
+                    // return when the underlying BIO could not satisfy the needs of 
+                    // SSL_connect() to continue the handshake, indicating the 
+                    // problem by the return value -1. In this case a call to 
+                    // SSL_get_error() with the return value of SSL_connect() will 
+                    // yield SSL_ERROR_WANT_READ or SSL_ERROR_WANT_WRITE.The calling 
+                    // process then must repeat the call after taking appropriate 
+                    // action to satisfy the needs of SSL_connect().The action 
+                    // depends on the underlying BIO. When using a non - blocking 
+                    // socket, nothing is to be done, but select() can be used to 
+                    // check for the required condition."
+
+                    bool done = false;
+                    while (!done)
                     {
-                        // According to the OpenSSL man page, there's nothing to do
-                        // for a non-blocking socket but wait 
-                        // ("... nothing is to be done...")
+                        LogError("Calling SSL_connect");
+                        int connect_result = SSL_connect(ssl);
 
-                        // "If the underlying BIO is non - blocking, SSL_connect() will also 
-                        // return when the underlying BIO could not satisfy the needs of 
-                        // SSL_connect() to continue the handshake, indicating the 
-                        // problem by the return value - 1. In this case a call to 
-                        // SSL_get_error() with the return value of SSL_connect() will 
-                        // yield SSL_ERROR_WANT_READ or SSL_ERROR_WANT_WRITE.The calling 
-                        // process then must repeat the call after taking appropriate 
-                        // action to satisfy the needs of SSL_connect().The action 
-                        // depends on the underlying BIO.When using a non - blocking 
-                        // socket, nothing is to be done, but select() can be used to 
-                        // check for the required condition."
+                        // The manual pages seem to be incorrect. They say that 0 is a failure,
+                        // but by experiment, 0 is the success result, at least when using
+                        // SSL_set_fd instead of BIO.
+                        // https://www.openssl.org/docs/man1.0.2/ssl/SSL_connect.html
+                        if (connect_result == 1 || connect_result == 0)
+                        {
+                            // Connect succeeded
+                            done = true;
+                            result = 0;
+                        }
+                        else
+                        {
+                            bool hard_error = is_hard_ssl_error(ssl, connect_result);
+                            if (hard_error)
+                            {
+                                // Connect failed, so delete the connection objects
+                                done = true;
+                                destroy_openssl_connection_members();
+                            }
+                        }
 
-                        retry++;
                         ThreadAPI_Sleep(RETRY_DELAY);
-                    }
-                    if (retry >= MAX_RETRY)
-                    {
-                        result = __FAILURE__;
-                        LogError("SSL_connect failed \n");
-                    }
-                    else
-                    {
-                        tlsio_static_instance.ssl = ssl;
-                        tlsio_static_instance.ssl_context = ctx;
-                        result = 0;
                     }
                 }
             }
         }
     }
 
-    if (result != 0)
-    {
-        destroy_openssl_connection_members();
-    }
+    LogError("create_and_connect_ssl returning %d", result);
     return result;
 }
 
@@ -182,11 +211,11 @@ static int send_handshake_bytes()
     //system_print_meminfo(); // This is useful for debugging purpose.
     //LogInfo("free heap size %d", system_get_free_heap_size()); // This is useful for debugging purpose.
     int result;
-    if (create_and_connect_ssl() != 0) 
+    if (create_and_connect_ssl() != 0)
     {
         result = __FAILURE__;
     }
-    else 
+    else
     {
         tlsio_static_instance.tlsio_state = TLSIO_STATE_OPEN;
         if (tlsio_static_instance.on_io_open_complete)
@@ -301,9 +330,9 @@ void tlsio_openssl_destroy(CONCRETE_IO_HANDLE tls_io)
 
 
 /* Codes_SRS_TLSIO_SSL_ESP8266_99_008: [ The tlsio_openssl_open shall return 0 when succeed ]*/
-int tlsio_openssl_open(CONCRETE_IO_HANDLE tls_io, 
-    ON_IO_OPEN_COMPLETE on_io_open_complete, void* on_io_open_complete_context, 
-    ON_BYTES_RECEIVED on_bytes_received, void* on_bytes_received_context, 
+int tlsio_openssl_open(CONCRETE_IO_HANDLE tls_io,
+    ON_IO_OPEN_COMPLETE on_io_open_complete, void* on_io_open_complete_context,
+    ON_BYTES_RECEIVED on_bytes_received, void* on_bytes_received_context,
     ON_IO_ERROR on_io_error, void* on_io_error_context)
 {
     int result = -1;
@@ -424,14 +453,14 @@ int tlsio_openssl_send(CONCRETE_IO_HANDLE tls_io, const void* buffer, size_t siz
             int total_written = 0;
             int res = 0;
 
-            while (size > 0) 
+            while (size > 0)
             {
                 /* Codes_SRS_TLSIO_SSL_ESP8266_99_016: [ The tlsio_openssl_send SSL_write success]*/
                 /* Codes_SRS_TLSIO_SSL_ESP8266_99_017: [ The tlsio_openssl_send SSL_write failure]*/
                 res = SSL_write(tls_io_instance->ssl, ((uint8_t*)buffer) + total_written, size);
                 // https://wiki.openssl.org/index.php/Manual:SSL_write(3)
 
-                if (res > 0) 
+                if (res > 0)
                 {
                     total_written += res;
                     size = size - res;
