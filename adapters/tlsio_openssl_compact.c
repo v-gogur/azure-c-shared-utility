@@ -60,6 +60,15 @@ typedef struct TLS_IO_INSTANCE_TAG
 // and their associated error strings.
 static TLS_IO_INSTANCE tlsio_static_instance;
 
+static void set_error_state_with_callback()
+{
+	tlsio_static_instance.tlsio_state = TLSIO_STATE_ERROR;
+	if (tlsio_static_instance.on_io_error != NULL)
+	{
+		tlsio_static_instance.on_io_error(tlsio_static_instance.on_io_error_context);
+	}
+}
+
 
 static void destroy_openssl_connection_members()
 {
@@ -296,17 +305,15 @@ int tlsio_openssl_open(CONCRETE_IO_HANDLE tls_io,
         /* Codes_SRS_TLSIO_SSL_ESP8266_99_007: [ The tlsio_openssl_open invalid state. ]*/
         if (tls_io_instance->tlsio_state != TLSIO_STATE_NOT_OPEN)
         {
-            tls_io_instance->tlsio_state = TLSIO_STATE_ERROR;
+            result = __FAILURE__;
+            LogError("Invalid tlsio_state. Expected state is TLSIO_STATE_NOT_OPEN.");
+
+			// Set up the error values so set_error_state_with_callback can use them
             tls_io_instance->on_io_error = on_io_error;
             tls_io_instance->on_io_error_context = on_io_error_context;
 
-            result = __FAILURE__;
-            LogError("Invalid tlsio_state. Expected state is TLSIO_STATE_NOT_OPEN.");
-            if (tls_io_instance->on_io_error != NULL)
-            {
-                tls_io_instance->on_io_error(tls_io_instance->on_io_error_context);
-            }
-        }
+			set_error_state_with_callback();
+		}
         else
         {
             tls_io_instance->on_io_open_complete = on_io_open_complete;
@@ -322,12 +329,8 @@ int tlsio_openssl_open(CONCRETE_IO_HANDLE tls_io,
 
             if (create_and_connect_ssl() != 0)
             {
-                tls_io_instance->tlsio_state = TLSIO_STATE_ERROR;
                 LogError("create_and_connect_ssl failed.");
-                if (tls_io_instance->on_io_error != NULL)
-                {
-                    tls_io_instance->on_io_error(tls_io_instance->on_io_error_context);
-                }
+				set_error_state_with_callback();
                 result = __FAILURE__;
            }
             else
@@ -381,7 +384,7 @@ int tlsio_openssl_close(CONCRETE_IO_HANDLE tls_io, ON_IO_CLOSE_COMPLETE on_io_cl
 
 int tlsio_openssl_send(CONCRETE_IO_HANDLE tls_io, const void* buffer, size_t size, ON_SEND_COMPLETE on_send_complete, void* callback_context)
 {
-    int result = -1;
+    int result = __FAILURE__;
     size_t bytes_to_send = size;
 
     if (buffer == NULL)
@@ -438,6 +441,10 @@ int tlsio_openssl_send(CONCRETE_IO_HANDLE tls_io, const void* buffer, size_t siz
                 sr = IO_SEND_OK;
                 result = 0;
             }
+			else
+			{
+				set_error_state_with_callback();
+			}
 
             if (on_send_complete != NULL)
             {
@@ -456,8 +463,8 @@ void tlsio_openssl_dowork(CONCRETE_IO_HANDLE tls_io)
         unsigned char buffer[64];
         int rcv_bytes;
 
+		// SSL_read is not checked for errors because it never reports anything useful
         rcv_bytes = SSL_read(tlsio_static_instance.ssl, buffer, sizeof(buffer));
-
         if (rcv_bytes > 0)
         {
             // tlsio_static_instance.on_bytes_received was already checked for NULL
