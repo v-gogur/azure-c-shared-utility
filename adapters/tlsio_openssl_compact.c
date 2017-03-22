@@ -20,9 +20,7 @@
     #define OPENSSL_DEFAULT_READ_BUFFER_SIZE 5120
 #endif // OPENSSL_DEFAULT_READ_BUFFER_SIZE
 
-#define OPENSSL_LOCAL_TCP_PORT 1000
 #define MAX_RETRY 20
-#define MAX_RETRY_WRITE 500
 #define RETRY_DELAY 1000
 
 
@@ -65,50 +63,27 @@ static TLS_IO_INSTANCE tlsio_static_instance;
 #define SSL_DEFAULT_FRAG_LEN                2048
 
 
-static void destroy_openssl_connection_members(TLS_IO_INSTANCE* tls_io_instance)
+static void destroy_openssl_connection_members()
 {
-    if (tls_io_instance != NULL)
+    if (tlsio_static_instance.ssl != NULL)
     {
-        if (tls_io_instance->ssl != NULL)
-        {
-            SSL_free(tls_io_instance->ssl);
-            tls_io_instance->ssl = NULL;
-        }
-        if (tls_io_instance->ssl_context != NULL)
-        {
-            SSL_CTX_free(tls_io_instance->ssl_context);
-            tls_io_instance->ssl_context = NULL;
-        }
-        if (tls_io_instance->sock < 0)
-        {
-            SSL_Socket_Close(tls_io_instance->sock);
-            tls_io_instance->sock = -1;
-        }
+        SSL_free(tlsio_static_instance.ssl);
+        tlsio_static_instance.ssl = NULL;
+    }
+    if (tlsio_static_instance.ssl_context != NULL)
+    {
+        SSL_CTX_free(tlsio_static_instance.ssl_context);
+        tlsio_static_instance.ssl_context = NULL;
+    }
+    if (tlsio_static_instance.sock < 0)
+    {
+        SSL_Socket_Close(tlsio_static_instance.sock);
+        tlsio_static_instance.sock = -1;
     }
 }
 
 
-/* Codes_SRS_TLSIO_SSL_ESP8266_99_001: [ The tlsio_openssl_retrieveoptions shall not do anything, and return NULL. ]*/
-static OPTIONHANDLER_HANDLE tlsio_openssl_retrieveoptions(CONCRETE_IO_HANDLE handle)
-{
-    OPTIONHANDLER_HANDLE result = NULL;
-    return result;
-}
-
-static void indicate_open_complete(TLS_IO_INSTANCE* tls_io_instance, IO_OPEN_RESULT open_result)
-{
-    if (tls_io_instance->on_io_open_complete == NULL)
-    {
-        LogError("NULL on_io_open_complete.");
-    }
-    else
-    {
-        tls_io_instance->on_io_open_complete(tls_io_instance->on_io_open_complete_context, open_result);
-    }
-}
-
-
-static int create_and_connect_ssl(TLS_IO_INSTANCE* tls_io_instance)
+static int create_and_connect_ssl()
 {
     int result;
     int ret;
@@ -119,21 +94,21 @@ static int create_and_connect_ssl(TLS_IO_INSTANCE* tls_io_instance)
     LogInfo("OpenSSL thread start...");
 
 
-    int sock = SSL_Socket_Create(tls_io_instance->hostname, tls_io_instance->port);
+    int sock = SSL_Socket_Create(tlsio_static_instance.hostname, tlsio_static_instance.port);
     if (sock < 0) {
         // Error logging already happened
-        result = __LINE__;
+        result = __FAILURE__;
     }
     else
     {
         // At this point the tls_io_instance "owns" the socket, 
         // so destroy_openssl_instance must be called if the socket needs to be closed
-        tls_io_instance->sock = sock;
+        tlsio_static_instance.sock = sock;
 
         ctx = SSL_CTX_new(TLSv1_2_client_method());
         if (!ctx)
         {
-            result = __LINE__;
+            result = __FAILURE__;
             LogError("create new SSL CTX failed");
         }
         else
@@ -141,8 +116,8 @@ static int create_and_connect_ssl(TLS_IO_INSTANCE* tls_io_instance)
             ssl = SSL_new(ctx);
             if (!ssl)
             {
-                result = __LINE__;
-                LogError("create ssl failed");
+                result = __FAILURE__;
+                LogError("SSL_new failed");
             }
             else
             {
@@ -152,7 +127,7 @@ static int create_and_connect_ssl(TLS_IO_INSTANCE* tls_io_instance)
                 ret = SSL_set_fd(ssl, sock);
                 if (ret != 1)
                 {
-                    result = __LINE__;
+                    result = __FAILURE__;
                     LogError("SSL_set_fd failed");
                 }
                 else 
@@ -181,13 +156,13 @@ static int create_and_connect_ssl(TLS_IO_INSTANCE* tls_io_instance)
                     }
                     if (retry >= MAX_RETRY)
                     {
-                        result = __LINE__;
+                        result = __FAILURE__;
                         LogError("SSL_connect failed \n");
                     }
                     else
                     {
-                        tls_io_instance->ssl = ssl;
-                        tls_io_instance->ssl_context = ctx;
+                        tlsio_static_instance.ssl = ssl;
+                        tlsio_static_instance.ssl_context = ctx;
                         result = 0;
                     }
                 }
@@ -197,24 +172,27 @@ static int create_and_connect_ssl(TLS_IO_INSTANCE* tls_io_instance)
 
     if (result != 0)
     {
-        destroy_openssl_connection_members(tls_io_instance);
+        destroy_openssl_connection_members();
     }
     return result;
 }
 
-static int send_handshake_bytes(TLS_IO_INSTANCE* tls_io_instance)
+static int send_handshake_bytes()
 {
     //system_print_meminfo(); // This is useful for debugging purpose.
     //LogInfo("free heap size %d", system_get_free_heap_size()); // This is useful for debugging purpose.
     int result;
-    if (create_and_connect_ssl(tls_io_instance) != 0) 
+    if (create_and_connect_ssl() != 0) 
     {
-        result = __LINE__;
+        result = __FAILURE__;
     }
     else 
     {
-        tls_io_instance->tlsio_state = TLSIO_STATE_OPEN;
-        indicate_open_complete(tls_io_instance, IO_OPEN_OK);
+        tlsio_static_instance.tlsio_state = TLSIO_STATE_OPEN;
+        if (tlsio_static_instance.on_io_open_complete)
+        {
+            tlsio_static_instance.on_io_open_complete(tlsio_static_instance.on_io_open_complete_context, IO_OPEN_OK);
+        }
         result = 0;
     }
 
@@ -222,24 +200,19 @@ static int send_handshake_bytes(TLS_IO_INSTANCE* tls_io_instance)
 }
 
 
-static int decode_ssl_received_bytes(TLS_IO_INSTANCE* tls_io_instance)
+static int decode_ssl_received_bytes()
 {
     int result;
     unsigned char buffer[64];
 
     int rcv_bytes;
-    rcv_bytes = SSL_read(tls_io_instance->ssl, buffer, sizeof(buffer));
-    // LogInfo("decode ssl recv bytes: %d", rcv_bytes);
+    rcv_bytes = SSL_read(tlsio_static_instance.ssl, buffer, sizeof(buffer));
+
     if (rcv_bytes > 0)
     {
-        if (tls_io_instance->on_bytes_received == NULL)
-        {
-            LogError("NULL on_bytes_received.");
-        }
-        else
-        {
-            tls_io_instance->on_bytes_received(tls_io_instance->on_bytes_received_context, buffer, rcv_bytes);
-        }
+        // tlsio_static_instance.on_bytes_received was already checked for NULL
+        // in the call to tlsio_openssl_open
+        tlsio_static_instance.on_bytes_received(tlsio_static_instance.on_bytes_received_context, buffer, rcv_bytes);
     }
     result = 0;
     return result;
@@ -303,54 +276,46 @@ CONCRETE_IO_HANDLE tlsio_openssl_create(void* io_create_parameters)
 /* Codes_SRS_TLSIO_SSL_ESP8266_99_010: [ The tlsio_openssl_destroy succeed ]*/
 void tlsio_openssl_destroy(CONCRETE_IO_HANDLE tls_io)
 {
-    /* Codes_SRS_TLSIO_SSL_ESP8266_99_009: [ The tlsio_openssl_destroy NULL parameter. make sure there is no crash ]*/
-    if (tls_io == NULL)
+    TLS_IO_INSTANCE* tls_io_instance = &tlsio_static_instance;
+    if (tls_io_instance->certificate != NULL)
     {
-        LogError("NULL tls_io.");
+        free(tls_io_instance->certificate);
+        tls_io_instance->certificate = NULL;
     }
-    else
+    if (tls_io_instance->hostname != NULL)
     {
-        TLS_IO_INSTANCE* tls_io_instance = (TLS_IO_INSTANCE*)tls_io;
-        if (tls_io_instance->certificate != NULL)
-        {
-            free(tls_io_instance->certificate);
-            tls_io_instance->certificate = NULL;
-        }
-        if (tls_io_instance->hostname != NULL)
-        {
-            free(tls_io_instance->hostname);
-            tls_io_instance->hostname = NULL;
-        }
-        if (tls_io_instance->x509certificate != NULL)
-        {
-            free((void*)tls_io_instance->x509certificate);
-            tls_io_instance->x509certificate = NULL;
-        }
-        if (tls_io_instance->x509privatekey != NULL)
-        {
-            free((void*)tls_io_instance->x509privatekey);
-            tls_io_instance->x509privatekey = NULL;
-        }
+        free(tls_io_instance->hostname);
+        tls_io_instance->hostname = NULL;
+    }
+    if (tls_io_instance->x509certificate != NULL)
+    {
+        free((void*)tls_io_instance->x509certificate);
+        tls_io_instance->x509certificate = NULL;
+    }
+    if (tls_io_instance->x509privatekey != NULL)
+    {
+        free((void*)tls_io_instance->x509privatekey);
+        tls_io_instance->x509privatekey = NULL;
     }
 }
 
 
 /* Codes_SRS_TLSIO_SSL_ESP8266_99_008: [ The tlsio_openssl_open shall return 0 when succeed ]*/
-int tlsio_openssl_open(CONCRETE_IO_HANDLE tls_io, ON_IO_OPEN_COMPLETE on_io_open_complete, void* on_io_open_complete_context, ON_BYTES_RECEIVED on_bytes_received, void* on_bytes_received_context, ON_IO_ERROR on_io_error, void* on_io_error_context)
+int tlsio_openssl_open(CONCRETE_IO_HANDLE tls_io, 
+    ON_IO_OPEN_COMPLETE on_io_open_complete, void* on_io_open_complete_context, 
+    ON_BYTES_RECEIVED on_bytes_received, void* on_bytes_received_context, 
+    ON_IO_ERROR on_io_error, void* on_io_error_context)
 {
-    int result;
+    int result = -1;
+    TLS_IO_INSTANCE* tls_io_instance = &tlsio_static_instance;
 
-    if (tls_io == NULL)
+    if (on_bytes_received == NULL)
     {
-        /* Codes_SRS_TLSIO_SSL_ESP8266_99_006: [ The tlsio_openssl_open failed because tls_io is NULL. ]*/
-        result = __LINE__;
-        LogError("NULL tls_io.");
+        LogError("Required non-NULL parameter on_bytes_received is NULL");
+        result = __FAILURE__;
     }
     else
     {
-
-        TLS_IO_INSTANCE* tls_io_instance = (TLS_IO_INSTANCE*)tls_io;
-
         /* Codes_SRS_TLSIO_SSL_ESP8266_99_007: [ The tlsio_openssl_open invalid state. ]*/
         if (tls_io_instance->tlsio_state != TLSIO_STATE_NOT_OPEN)
         {
@@ -358,7 +323,7 @@ int tlsio_openssl_open(CONCRETE_IO_HANDLE tls_io, ON_IO_OPEN_COMPLETE on_io_open
             tls_io_instance->on_io_error = on_io_error;
             tls_io_instance->on_io_error_context = on_io_error_context;
 
-            result = __LINE__;
+            result = __FAILURE__;
             LogError("Invalid tlsio_state. Expected state is TLSIO_STATE_NOT_OPEN.");
             if (tls_io_instance->on_io_error != NULL)
             {
@@ -378,8 +343,9 @@ int tlsio_openssl_open(CONCRETE_IO_HANDLE tls_io, ON_IO_OPEN_COMPLETE on_io_open
 
             tls_io_instance->tlsio_state = TLSIO_STATE_OPENING;
 
-            if (send_handshake_bytes(tls_io_instance) != 0) {
-                result = __LINE__;
+            if (send_handshake_bytes(tls_io_instance) != 0)
+            {
+                result = __FAILURE__;
                 tls_io_instance->tlsio_state = TLSIO_STATE_ERROR;
                 LogError("send_handshake_bytes failed.");
                 if (tls_io_instance->on_io_error != NULL)
@@ -387,7 +353,8 @@ int tlsio_openssl_open(CONCRETE_IO_HANDLE tls_io, ON_IO_OPEN_COMPLETE on_io_open
                     tls_io_instance->on_io_error(tls_io_instance->on_io_error_context);
                 }
             }
-            else {
+            else
+            {
                 result = 0;
                 tls_io_instance->tlsio_state = TLSIO_STATE_OPEN;
             }
@@ -403,38 +370,29 @@ int tlsio_openssl_close(CONCRETE_IO_HANDLE tls_io, ON_IO_CLOSE_COMPLETE on_io_cl
     //LogInfo("tlsio_openssl_close");
     int result;
 
-    /* Codes_SRS_TLSIO_SSL_ESP8266_99_011: [ The tlsio_openssl_close NULL parameter.]*/
-    if (tls_io == NULL)
+    TLS_IO_INSTANCE* tls_io_instance = &tlsio_static_instance;
+
+    if ((tls_io_instance->tlsio_state == TLSIO_STATE_NOT_OPEN) ||
+        (tls_io_instance->tlsio_state == TLSIO_STATE_CLOSING) ||
+        (tls_io_instance->tlsio_state == TLSIO_STATE_OPENING))
     {
-        result = __LINE__;
-        LogError("NULL tls_io.");
+        result = __FAILURE__;
+        tls_io_instance->tlsio_state = TLSIO_STATE_ERROR;
+        LogError("Invalid tlsio_state. Expected state is TLSIO_STATE_OPEN or TLSIO_STATE_ERROR.");
     }
     else
     {
-        TLS_IO_INSTANCE* tls_io_instance = (TLS_IO_INSTANCE*)tls_io;
+        tls_io_instance->tlsio_state = TLSIO_STATE_CLOSING;
+        tls_io_instance->on_io_close_complete = on_io_close_complete;
+        tls_io_instance->on_io_close_complete_context = callback_context;
 
-        if ((tls_io_instance->tlsio_state == TLSIO_STATE_NOT_OPEN) ||
-            (tls_io_instance->tlsio_state == TLSIO_STATE_CLOSING) ||
-            (tls_io_instance->tlsio_state == TLSIO_STATE_OPENING))
+        (void)SSL_shutdown(tls_io_instance->ssl);
+        destroy_openssl_connection_members();
+        tls_io_instance->tlsio_state = TLSIO_STATE_NOT_OPEN;
+        result = 0;
+        if (tls_io_instance->on_io_close_complete != NULL)
         {
-            result = __LINE__;
-            tls_io_instance->tlsio_state = TLSIO_STATE_ERROR;
-            LogError("Invalid tlsio_state. Expected state is TLSIO_STATE_OPEN or TLSIO_STATE_ERROR.");
-        }
-        else
-        {
-            tls_io_instance->tlsio_state = TLSIO_STATE_CLOSING;
-            tls_io_instance->on_io_close_complete = on_io_close_complete;
-            tls_io_instance->on_io_close_complete_context = callback_context;
-
-            (void)SSL_shutdown(tls_io_instance->ssl);
-            destroy_openssl_connection_members(tls_io_instance);
-            tls_io_instance->tlsio_state = TLSIO_STATE_NOT_OPEN;
-            result = 0;
-            if (tls_io_instance->on_io_close_complete != NULL)
-            {
-                tls_io_instance->on_io_close_complete(tls_io_instance->on_io_close_complete_context);
-            }
+            tls_io_instance->on_io_close_complete(tls_io_instance->on_io_close_complete_context);
         }
     }
     return result;
@@ -442,108 +400,112 @@ int tlsio_openssl_close(CONCRETE_IO_HANDLE tls_io, ON_IO_CLOSE_COMPLETE on_io_cl
 
 int tlsio_openssl_send(CONCRETE_IO_HANDLE tls_io, const void* buffer, size_t size, ON_SEND_COMPLETE on_send_complete, void* callback_context)
 {
-    int result;
+    int result = -1;
+    size_t bytes_to_send = size;
 
-    if (tls_io == NULL)
+    if (buffer == NULL)
     {
         /* Codes_SRS_TLSIO_SSL_ESP8266_99_014: [ The tlsio_openssl_send NULL instance.]*/
-        result = __LINE__;
-        LogError("NULL tls_io.");
-    }
-    else if (buffer == NULL)
-    {
-        /* Codes_SRS_TLSIO_SSL_ESP8266_99_014: [ The tlsio_openssl_send NULL instance.]*/
-        result = __LINE__;
+        result = __FAILURE__;
         LogError("NULL buffer.");
     }
     else
     {
-        TLS_IO_INSTANCE* tls_io_instance = (TLS_IO_INSTANCE*)tls_io;
+        TLS_IO_INSTANCE* tls_io_instance = &tlsio_static_instance;
 
         if (tls_io_instance->tlsio_state != TLSIO_STATE_OPEN)
         {
             /* Codes_SRS_TLSIO_SSL_ESP8266_99_015: [ The tlsio_openssl_send wrog state.]*/
-            result = __LINE__;
+            result = __FAILURE__;
             LogError("Invalid tlsio_state for send. Expected state is TLSIO_STATE_OPEN.");
         }
         else
         {
-            int total_write = 0;
+            int total_written = 0;
             int res = 0;
-            int retry = 0;
 
-            while (size > 0 && retry < MAX_RETRY_WRITE) {
+            while (size > 0) 
+            {
                 /* Codes_SRS_TLSIO_SSL_ESP8266_99_016: [ The tlsio_openssl_send SSL_write success]*/
                 /* Codes_SRS_TLSIO_SSL_ESP8266_99_017: [ The tlsio_openssl_send SSL_write failure]*/
-                res = SSL_write(tls_io_instance->ssl, ((uint8_t*)buffer) + total_write, size);
+                res = SSL_write(tls_io_instance->ssl, ((uint8_t*)buffer) + total_written, size);
+                // https://wiki.openssl.org/index.php/Manual:SSL_write(3)
 
-                //LogInfo("SSL_write res: %d, size: %d, retry: %d", res, size, retry);
-               // LogInfo("SSL_write res:%d size:%d retry:%d\n",res,size,retry);
-
-                if (res > 0) {
-                    total_write += res;
+                if (res > 0) 
+                {
+                    total_written += res;
                     size = size - res;
                 }
                 else
                 {
-                    retry++;
+                    // SSL_write returned non-success. It may just be busy, or it may be broken.
+                    int err = SSL_get_error(tls_io_instance->ssl, res);
+                    if (err == SSL_ERROR_WANT_READ || err == SSL_ERROR_WANT_WRITE)
+                    {
+                        // Repeat SSL_write with the same parameters until OpenSSL
+                        // doesn't want any more reading or writing. Per the manual,
+                        // there is no fixed limit to the number of times this must
+                        // be repeated.
+                    }
+                    else if (err == SSL_ERROR_NONE)
+                    {
+                        // This is an unexpected success. It should not happen on a 
+                        // non-blocking socket, but the only reasonable way to
+                        // handle it is to declare victory.
+                        LogInfo("Unexpected SSL_ERROR_NONE from SSL_write");
+                        break;
+                    }
+                    else
+                    {
+                        // This is an unexpected error, and we need to bail out.
+                        LogInfo("Error from SSL_write: %d", err);
+                        break;
+                    }
                 }
-                //vTaskDelay(5);
-                // TODO: If this sleep is 5 msec then the device goes into an infinite
-                // loop of failure. That is very wrong, and probably indicates a need
-                // for redesign. Loop timing should be mere optimization. (roy)
-                ThreadAPI_Sleep(50);
+                // Try again real soon
+                ThreadAPI_Sleep(5);
             }
 
-            if (retry >= MAX_RETRY_WRITE)
+            IO_SEND_RESULT sr = IO_SEND_ERROR;
+            if (total_written == bytes_to_send)
             {
-                result = __LINE__;
-                if (on_send_complete != NULL)
-                {
-                    on_send_complete(callback_context, IO_SEND_ERROR);
-                }
-            }
-            else
-            {
+                sr = IO_SEND_OK;
                 result = 0;
-                if (on_send_complete != NULL)
-                {
-                    on_send_complete(callback_context, IO_SEND_OK);
-                }
+            }
+
+            if (on_send_complete != NULL)
+            {
+                on_send_complete(callback_context, sr);
             }
         }
     }
     return result;
 }
 
-/* Codes_SRS_TLSIO_SSL_ESP8266_99_019: [ The tlsio_openssl_dowrok succeed]*/
+/* Codes_SRS_TLSIO_SSL_ESP8266_99_019: [ The tlsio_openssl_dowork succeed]*/
 void tlsio_openssl_dowork(CONCRETE_IO_HANDLE tls_io)
 {
-    if (tls_io == NULL)
+    if (tlsio_static_instance.tlsio_state == TLSIO_STATE_OPEN)
     {
-        /* Codes_SRS_TLSIO_SSL_ESP8266_99_018: [ The tlsio_openssl_dowork NULL parameter. No crash when passing NULL]*/
-        LogError("NULL tls_io.");
+        decode_ssl_received_bytes();
     }
     else
     {
-        TLS_IO_INSTANCE* tls_io_instance = (TLS_IO_INSTANCE*)tls_io;
-
-        if (tls_io_instance->tlsio_state == TLSIO_STATE_OPEN)
-        {
-            decode_ssl_received_bytes(tls_io_instance);
-        }
-        else
-        {
-            LogError("Invalid tlsio_state for dowork. Expected state is TLSIO_STATE_OPEN.");
-        }
+        LogError("Invalid tlsio_state for dowork. Expected state is TLSIO_STATE_OPEN.");
     }
-
 }
 
 /* Codes_SRS_TLSIO_SSL_ESP8266_99_002: [ The tlsio_arduino_setoption shall not do anything, and return 0. ]*/
 int tlsio_openssl_setoption(CONCRETE_IO_HANDLE tls_io, const char* optionName, const void* value)
 {
     return 0;
+}
+
+/* Codes_SRS_TLSIO_SSL_ESP8266_99_001: [ The tlsio_openssl_retrieveoptions shall not do anything, and return NULL. ]*/
+static OPTIONHANDLER_HANDLE tlsio_openssl_retrieveoptions(CONCRETE_IO_HANDLE handle)
+{
+    OPTIONHANDLER_HANDLE result = NULL;
+    return result;
 }
 
 static const IO_INTERFACE_DESCRIPTION tlsio_openssl_interface_description =
