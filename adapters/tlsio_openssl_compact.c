@@ -20,7 +20,8 @@
 #define OPENSSL_DEFAULT_READ_BUFFER_SIZE 5120
 #endif // OPENSSL_DEFAULT_READ_BUFFER_SIZE
 
-#define RETRY_DELAY 1000
+#define CONNECT_RETRY_DELAY_MILLISECONDS 1000
+#define SEND_RETRY_DELAY_MILLISECONDS 5
 
 
 typedef enum TLSIO_STATE_TAG
@@ -83,16 +84,15 @@ static void destroy_openssl_connection_members()
 
 // This method tests for hard errors returned from either SSL_write or SSL_connect.
 // Returns 
-//     false for SSL_ERROR_WANT_READ or SSL_ERROR_WANT_WRITE
-//     true for other errors (real failures)
-static bool is_hard_ssl_error(SSL* ssl, int callReturn)
+//     0 for SSL_ERROR_WANT_READ or SSL_ERROR_WANT_WRITE
+//     The actual error for other errors (real failures)
+int is_hard_ssl_error(SSL* ssl, int callReturn)
 {
-    bool result = false;
+    int result = 0;
     int err = SSL_get_error(ssl, callReturn);
     if (err != SSL_ERROR_WANT_READ && err != SSL_ERROR_WANT_WRITE)
     {
-        result = true;
-        //LogInfo("Decoded error from SSL_write or SSL_connect: %d", err);
+        result = err;
     }
     return result;
 }
@@ -175,40 +175,23 @@ static int create_and_connect_ssl()
                         }
                         else
                         {
-                            bool hard_error = is_hard_ssl_error(tlsio_static_instance.ssl, connect_result);
-                            if (hard_error)
+                            int hard_error = is_hard_ssl_error(tlsio_static_instance.ssl, connect_result);
+                            if (hard_error != 0)
                             {
                                 // Connect failed, so delete the connection objects
                                 done = true;
                                 destroy_openssl_connection_members();
+                                LogInfo("Error from SSL_connect: %d", hard_error);
                             }
                         }
 
-                        ThreadAPI_Sleep(RETRY_DELAY);
+                        ThreadAPI_Sleep(CONNECT_RETRY_DELAY_MILLISECONDS);
                     }
                 }
             }
         }
     }
 
-    return result;
-}
-
-static int decode_ssl_received_bytes()
-{
-    int result;
-    unsigned char buffer[64];
-
-    int rcv_bytes;
-    rcv_bytes = SSL_read(tlsio_static_instance.ssl, buffer, sizeof(buffer));
-
-    if (rcv_bytes > 0)
-    {
-        // tlsio_static_instance.on_bytes_received was already checked for NULL
-        // in the call to tlsio_openssl_open
-        tlsio_static_instance.on_bytes_received(tlsio_static_instance.on_bytes_received_context, buffer, rcv_bytes);
-    }
-    result = 0;
     return result;
 }
 
@@ -437,31 +420,16 @@ int tlsio_openssl_send(CONCRETE_IO_HANDLE tls_io, const void* buffer, size_t siz
                 else
                 {
                     // SSL_write returned non-success. It may just be busy, or it may be broken.
-                    int err = SSL_get_error(tls_io_instance->ssl, res);
-                    if (err == SSL_ERROR_WANT_READ || err == SSL_ERROR_WANT_WRITE)
-                    {
-                        // Repeat SSL_write with the same parameters until OpenSSL
-                        // doesn't want any more reading or writing. Per the manual,
-                        // there is no fixed limit to the number of times this must
-                        // be repeated.
-                    }
-                    else if (err == SSL_ERROR_NONE)
-                    {
-                        // This is an unexpected success. It should not happen on a 
-                        // non-blocking socket, but the only reasonable way to
-                        // handle it is to declare victory.
-                        LogInfo("Unexpected SSL_ERROR_NONE from SSL_write");
-                        break;
-                    }
-                    else
+                    int hard_error = is_hard_ssl_error(tls_io_instance->ssl, res);
+                    if (hard_error != 0)
                     {
                         // This is an unexpected error, and we need to bail out.
-                        LogInfo("Error from SSL_write: %d", err);
+                        LogInfo("Error from SSL_write: %d", hard_error);
                         break;
                     }
                 }
                 // Try again real soon
-                ThreadAPI_Sleep(5);
+                ThreadAPI_Sleep(SEND_RETRY_DELAY_MILLISECONDS);
             }
 
             IO_SEND_RESULT sr = IO_SEND_ERROR;
@@ -485,7 +453,17 @@ void tlsio_openssl_dowork(CONCRETE_IO_HANDLE tls_io)
 {
     if (tlsio_static_instance.tlsio_state == TLSIO_STATE_OPEN)
     {
-        decode_ssl_received_bytes();
+        unsigned char buffer[64];
+        int rcv_bytes;
+
+        rcv_bytes = SSL_read(tlsio_static_instance.ssl, buffer, sizeof(buffer));
+
+        if (rcv_bytes > 0)
+        {
+            // tlsio_static_instance.on_bytes_received was already checked for NULL
+            // in the call to tlsio_openssl_open
+            tlsio_static_instance.on_bytes_received(tlsio_static_instance.on_bytes_received_context, buffer, rcv_bytes);
+        }
     }
     else
     {
