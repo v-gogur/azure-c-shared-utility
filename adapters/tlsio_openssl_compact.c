@@ -72,7 +72,6 @@ static void set_error_state_with_callback()
 
 static void destroy_openssl_connection_members()
 {
-    LogInfo("starting destroy");
     if (tlsio_static_instance.ssl != NULL)
     {
         SSL_free(tlsio_static_instance.ssl);
@@ -88,7 +87,6 @@ static void destroy_openssl_connection_members()
         SSL_Socket_Close(tlsio_static_instance.sock);
         tlsio_static_instance.sock = -1;
     }
-    LogInfo("ending destroy");
 }
 
 // This method tests for hard errors returned from either SSL_write or SSL_connect.
