@@ -261,6 +261,7 @@ CONCRETE_IO_HANDLE tlsio_openssl_create(void* io_create_parameters)
 /* Codes_SRS_TLSIO_SSL_ESP8266_99_010: [ The tlsio_openssl_destroy succeed ]*/
 void tlsio_openssl_destroy(CONCRETE_IO_HANDLE tls_io)
 {
+	tls_io;
 	destroy_openssl_connection_members();
 
 	if (tlsio_static_instance.certificate != NULL)
@@ -287,6 +288,7 @@ int tlsio_openssl_open(CONCRETE_IO_HANDLE tls_io,
 	ON_BYTES_RECEIVED on_bytes_received, void* on_bytes_received_context,
 	ON_IO_ERROR on_io_error, void* on_io_error_context)
 {
+	tls_io;
 	int result = -1;
 	TLS_IO_INSTANCE* tls_io_instance = &tlsio_static_instance;
 
@@ -344,6 +346,7 @@ int tlsio_openssl_open(CONCRETE_IO_HANDLE tls_io,
 /* Codes_SRS_TLSIO_SSL_ESP8266_99_013: [ The tlsio_openssl_close succeed.]*/
 int tlsio_openssl_close(CONCRETE_IO_HANDLE tls_io, ON_IO_CLOSE_COMPLETE on_io_close_complete, void* callback_context)
 {
+	tls_io;
 	//LogInfo("tlsio_openssl_close");
 	int result;
 
@@ -376,6 +379,7 @@ int tlsio_openssl_close(CONCRETE_IO_HANDLE tls_io, ON_IO_CLOSE_COMPLETE on_io_cl
 
 int tlsio_openssl_send(CONCRETE_IO_HANDLE tls_io, const void* buffer, size_t size, ON_SEND_COMPLETE on_send_complete, void* callback_context)
 {
+	tls_io;
 	int result = __FAILURE__;
 	size_t bytes_to_send = size;
 
@@ -397,7 +401,7 @@ int tlsio_openssl_send(CONCRETE_IO_HANDLE tls_io, const void* buffer, size_t siz
 		}
 		else
 		{
-			int total_written = 0;
+			unsigned int total_written = 0;
 			int res = 0;
 
 			while (size > 0)
@@ -450,6 +454,7 @@ int tlsio_openssl_send(CONCRETE_IO_HANDLE tls_io, const void* buffer, size_t siz
 /* Codes_SRS_TLSIO_SSL_ESP8266_99_019: [ The tlsio_openssl_dowork succeed]*/
 void tlsio_openssl_dowork(CONCRETE_IO_HANDLE tls_io)
 {
+	tls_io;
 	if (tlsio_static_instance.tlsio_state == TLSIO_STATE_OPEN)
 	{
 		unsigned char buffer[64];
@@ -478,12 +483,16 @@ void tlsio_openssl_dowork(CONCRETE_IO_HANDLE tls_io)
 /* Codes_SRS_TLSIO_SSL_ESP8266_99_002: [ The tlsio_arduino_setoption shall not do anything, and return 0. ]*/
 int tlsio_openssl_setoption(CONCRETE_IO_HANDLE tls_io, const char* optionName, const void* value)
 {
+	tls_io;
+	value;
+	optionName;
 	return 0;
 }
 
 /* Codes_SRS_TLSIO_SSL_ESP8266_99_001: [ The tlsio_openssl_retrieveoptions shall not do anything, and return NULL. ]*/
 static OPTIONHANDLER_HANDLE tlsio_openssl_retrieveoptions(CONCRETE_IO_HANDLE handle)
 {
+	handle;
 	OPTIONHANDLER_HANDLE result = NULL;
 	return result;
 }

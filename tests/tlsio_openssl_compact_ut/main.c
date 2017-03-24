@@ -9,7 +9,7 @@ int main(void)
     /**
      * Identify the test suite to run here. 
      */
-    RUN_TEST_SUITE(tlsio_openssl_compact_ut, failedTestCount);
+    RUN_TEST_SUITE(tlsio_openssl_compact_unittests, failedTestCount);
     
     return failedTestCount;
 }

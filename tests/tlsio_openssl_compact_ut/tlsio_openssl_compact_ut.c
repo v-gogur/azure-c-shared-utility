@@ -138,7 +138,7 @@ static TEST_MUTEX_HANDLE g_dllByDll;
  *   RUN_TEST_SUITE(template_empty_ut, failedTestCount);
  *
  */
-BEGIN_TEST_SUITE(tlsio_openssl_compact_ut)
+BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
 
     /**
      * This is the place where we initialize the test system. Replace the test name to associate the test 
@@ -280,4 +280,4 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_ut)
 #endif
 
 
-END_TEST_SUITE(tlsio_openssl_compact_ut)
+END_TEST_SUITE(tlsio_openssl_compact_unittests)

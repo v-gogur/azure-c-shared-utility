@@ -12,7 +12,7 @@ ${theseTestsName}.c
 )
 
 set(${theseTestsName}_c_files
-../../adapters/tickcounter_freertos.c
+../../adapters/tlsio_openssl_compact.c
 )
 
 set(${theseTestsName}_h_files
