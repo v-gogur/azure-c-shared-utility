@@ -279,5 +279,39 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
     }
 #endif
 
+	/* Tests_SRS_TEMPLATE_21_001: [ The target_create shall call callee_open to do stuff and allocate the memory. ]*/
+	TEST_FUNCTION(target_create_call_callee_open__succeed)
+	{
+		///arrange
+		//TARGET_RESULT result;
+
+		/**
+		* The STRICT_EXPECTED_CALL creates a list of functions that we expect that the target calls.
+		* The function umock_c_get_expected_calls() returns this list as a serialized string.
+		* You can determine all parameters, with the expected value, or define that the argument must
+		*    be ignored by the test suite.
+		* During the execution, the suit will collect the same information, creating a second list of
+		*   called functions.
+		* The function umock_c_get_actual_calls() return this list as a serialized string.
+		*/
+		//STRICT_EXPECTED_CALL(callee_open(SIZEOF_FOO_MEMORY));
+		//STRICT_EXPECTED_CALL(gballoc_malloc(SIZEOF_FOO_MEMORY));    //This is the malloc in the mock my_callee_open().
+		//STRICT_EXPECTED_CALL(gballoc_malloc(IGNORED_NUM_ARG)).IgnoreArgument(1);    //This is the malloc in the target_create().
+		//STRICT_EXPECTED_CALL(gballoc_free(IGNORED_PTR_ARG)).IgnoreArgument(1);      //This is the free in the target_create().
+
+																					///act
+		//result = target_create(SIZEOF_FOO_MEMORY);
+
+		///assert
+		//ASSERT_ARE_EQUAL(int, TARGET_RESULT_OK, result);
+		/**
+		* The follow assert will compare the expected calls with the actual calls. If it is different,
+		*    it will show the serialized strings with the differences in the log.
+		*/
+		ASSERT_ARE_EQUAL(char_ptr, umock_c_get_expected_calls(), umock_c_get_actual_calls());
+
+		///cleanup
+		//target_destroy();
+	}
 
 END_TEST_SUITE(tlsio_openssl_compact_unittests)
