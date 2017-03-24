@@ -62,7 +62,14 @@ void my_gballoc_free(void* ptr)
  */
 #define ENABLE_MOCKS
 #include "azure_c_shared_utility/gballoc.h"
+#include "azure_c_shared_utility/ssl_socket.h"
+#include "azure_c_shared_utility/threadapi.h"
+#include "openssl/ssl.h"
 #undef ENABLE_MOCKS
+int TLSv1_2_client_method() { return 0; }
+void SSL_CTX_set_default_read_buffer_len(SSL_CTX* dummy, int dummy2) { dummy; dummy2; }
+int SSL_shutdown(SSL* dummy) { dummy; return 0; }
+
 
 /**
  * Include the target header after the ENABLE_MOCKS session.
