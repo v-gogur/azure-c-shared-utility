@@ -29,9 +29,9 @@ typedef struct SSL_CTX_TAG
 #define SSL_ERROR_WANT_READ 3
 #define SSL_ERROR_WANT_WRITE 4
 
-int TLSv1_2_client_method() { return 0; }
-void SSL_CTX_set_default_read_buffer_len(SSL_CTX* dummy, int dummy2) { dummy; dummy2; }
-int SSL_shutdown(SSL* dummy) { dummy; return 0; }
+int TLSv1_2_client_method();
+void SSL_CTX_set_default_read_buffer_len(SSL_CTX* dummy, int dummy2);
+int SSL_shutdown(SSL* dummy);
 
 
 MOCKABLE_FUNCTION(, void, SSL_free, SSL*, ssl);
