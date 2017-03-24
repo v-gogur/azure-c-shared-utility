@@ -12,11 +12,7 @@ ${theseTestsName}.c
 )
 
 set(${theseTestsName}_c_files
-##
-# Include all target files that you need to execute the test.
-# ../../adapters/<myTestOnAdapters>.c
-# ../../src/<myTestOnSRC>.c
-##
+../../adapters/tickcounter_freertos.c
 )
 
 set(${theseTestsName}_h_files
@@ -24,5 +20,7 @@ set(${theseTestsName}_h_files
 # Include all headers that you need to execute the test. Normally we don't need any.
 ##
 )
+
+include_directories(.)
 
 build_c_test_artifacts(${theseTestsName} ON "tests/azure_c_shared_utility_tests")
