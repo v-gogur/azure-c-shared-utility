@@ -38,12 +38,8 @@ typedef enum TLSIO_STATE_TAG
 typedef struct TLS_IO_INSTANCE_TAG
 {
 	ON_BYTES_RECEIVED on_bytes_received;
-	ON_IO_OPEN_COMPLETE on_io_open_complete;
-	ON_IO_CLOSE_COMPLETE on_io_close_complete;
 	ON_IO_ERROR on_io_error;
 	void* on_bytes_received_context;
-	void* on_io_open_complete_context;
-	void* on_io_close_complete_context;
 	void* on_io_error_context;
 	SSL* ssl;
 	SSL_CTX* ssl_context;

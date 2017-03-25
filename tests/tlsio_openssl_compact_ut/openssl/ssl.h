@@ -16,15 +16,8 @@ extern "C" {
 
 // This header mocks the small subset of the the OpenSSL ssl.h needed for tlsio_openssl_compact testing
 
-typedef struct SSL_TAG
-{
-	int dummy;
-} SSL;
-
-typedef struct SSL_CTX_TAG
-{
-	int dummy;
-} SSL_CTX;
+typedef void SSL;
+typedef void SSL_CTX;
 
 #define SSL_ERROR_WANT_READ 3
 #define SSL_ERROR_WANT_WRITE 4

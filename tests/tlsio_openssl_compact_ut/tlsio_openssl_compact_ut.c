@@ -46,6 +46,7 @@ void my_gballoc_free(void* ptr)
 #include "umocktypes_charptr.h"
 #include "umock_c_negative_tests.h"
 #include "azure_c_shared_utility/macro_utils.h"
+#include "azure_c_shared_utility/threadapi.h"
 
 /**
  * Include the mockable headers here.
@@ -63,29 +64,15 @@ void my_gballoc_free(void* ptr)
 #define ENABLE_MOCKS
 #include "azure_c_shared_utility/gballoc.h"
 #include "azure_c_shared_utility/ssl_socket.h"
-#include "azure_c_shared_utility/threadapi.h"
 #include "openssl/ssl.h"
 #undef ENABLE_MOCKS
 int TLSv1_2_client_method() { return 0; }
 void SSL_CTX_set_default_read_buffer_len(SSL_CTX* dummy, int dummy2) { dummy; dummy2; }
 int SSL_shutdown(SSL* dummy) { dummy; return 0; }
+void ThreadAPI_Sleep(unsigned int milliseconds) { milliseconds; return; }
 
-
-/**
- * Include the target header after the ENABLE_MOCKS session.
- */
-//#include "target/target.h"
-
-
-/**
- * If your test need constants, this is a good place to define it. For examples:
- *
- * #define TEST_CREATE_CONNECTION_HOST_NAME (const char*)"https://test.azure-devices.net"
- *
- * static const char* SendBuffer = "Message to send";
- *
- */
-//#define SIZEOF_FOO_MEMORY   10
+#define SSL_Get_IPv4_OK (uint32_t)0x11223344
+#define SSL_Get_IPv4_FAIL 0
 
  /**
   * You can create some global variables that your test will need in some way.
@@ -170,7 +157,8 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
          *
          * On the target.h example, there is the type TARGET_HANDLE that is a void*
          */
-        //REGISTER_UMOCK_ALIAS_TYPE(CALLEE_HANDLE, void*);
+        REGISTER_UMOCK_ALIAS_TYPE(SSL, void*);
+        REGISTER_UMOCK_ALIAS_TYPE(SSL_CTX, void*);
 
         /**
          * It is necessary to replace all mockable functions by the mock functions that you created here.
@@ -189,6 +177,9 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
         //REGISTER_GLOBAL_MOCK_RETURN(callee_bar_1, CALLEE_RESULT_OK);
         //REGISTER_GLOBAL_MOCK_RETURN(callee_bar_2, CALLEE_RESULT_OK);
         //REGISTER_GLOBAL_MOCK_FAIL_RETURN(callee_bar_2, CALLEE_RESULT_FAIL);
+
+        REGISTER_GLOBAL_MOCK_RETURN(SSL_Get_IPv4, SSL_Get_IPv4_OK);
+        REGISTER_GLOBAL_MOCK_FAIL_RETURN(SSL_Get_IPv4, SSL_Get_IPv4_FAIL);
 
         /**
          * Or you can combine, for example, in the success case malloc will call my_gballoc_malloc, and for
@@ -249,6 +240,10 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
     }
 
     // TODO: Add your unit test functions as in the example below:
+    TEST_FUNCTION(target_tlsio_openssl_create__succeed)
+    {
+
+    }
 #if false
     /* Tests_SRS_TEMPLATE_21_001: [ The target_create shall call callee_open to do stuff and allocate the memory. ]*/
     TEST_FUNCTION(target_create_call_callee_open__succeed)
