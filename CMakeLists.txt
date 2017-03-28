@@ -9,7 +9,7 @@ endif()
 
 project(azure_c_shared_utility)
 
-set(C_SHARED_VERSION 1.0.29)
+set(C_SHARED_VERSION 1.0.30)
 
 if(POLICY CMP0042)
     cmake_policy(SET CMP0042 NEW)
@@ -40,7 +40,7 @@ option(run_unittests "set run_unittests to ON to run unittests (default is OFF)"
 option(skip_samples "set skip_samples to ON to skip building samples (default is OFF)[if possible, they are always built]" OFF)
 option(use_http "set use_http to ON if http is to be used, set to OFF to not use http" ON)
 option(use_condition "set use_condition to ON if the condition module and its adapters should be enabled" ON)
-option(use_wsio "set use_wsio to ON to use libwebsockets for WebSocket support (default is OFF)" OFF)
+option(use_wsio "set use_wsio to ON to build WebSockets support (default is ON)" ON)
 option(nuget_e2e_tests "set nuget_e2e_tests to ON to generate e2e tests to run with nuget packages (default is OFF)" OFF)
 option(use_installed_dependencies "set use_installed_dependencies to ON to use installed packages instead of building dependencies from submodules" OFF)
 option(use_default_uuid "set use_default_uuid to ON to use the out of the box UUID that comes with the SDK rather than platform specific implementations" OFF)
@@ -127,8 +127,7 @@ if(${use_cyclonessl} AND WIN32)
 
 endif()
 
-if(${use_openssl} OR ${use_wsio})
-    # use_wsio pulls in libwebsockets, which uses OpenSSL
+if(${use_openssl})
     if("${OPENSSL_ROOT_DIR}" STREQUAL "" AND NOT ("$ENV{OpenSSLDir}" STREQUAL ""))
         set(OPENSSL_ROOT_DIR $ENV{OpenSSLDir} CACHE PATH "")
     endif()
@@ -175,62 +174,6 @@ elseif(UNIX) #LINUX OR APPLE
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fPIC -Werror")
     if(NOT (IN_OPENWRT OR APPLE))
         set (CMAKE_C_FLAGS "-D_POSIX_C_SOURCE=200112L ${CMAKE_C_FLAGS}")
-    endif()
-endif()
-
-if(${use_wsio})
-
-    if(WIN32)
-        string(REPLACE "/W4" "/W0" CMAKE_C_FLAGS ${CMAKE_C_FLAGS})
-        string(REPLACE "/W4" "/W0" CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS})
-
-        set(CMAKE_EXE_LINKER_FLAGS_PREV ${CMAKE_EXE_LINKER_FLAGS})
-        set(CMAKE_SHARED_LINKER_FLAGS_PREV ${CMAKE_SHARED_LINKER_FLAGS})
-        set(CMAKE_MODULE_LINKER_FLAGS_PREV ${CMAKE_MODULE_LINKER_FLAGS})
-        set(CMAKE_STATIC_LINKER_FLAGS_PREV ${CMAKE_MODULE_STATIC_FLAGS})
-
-        set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} /IGNORE:4006 /IGNORE:4221")
-        set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} /IGNORE:4006 /IGNORE:4221")
-        set(CMAKE_MODULE_LINKER_FLAGS "${CMAKE_MODULE_LINKER_FLAGS} /IGNORE:4006 /IGNORE:4221")
-        set(CMAKE_STATIC_LINKER_FLAGS "${CMAKE_STATIC_LINKER_FLAGS} /IGNORE:4006 /IGNORE:4221")
-
-        remove_definitions(/WX)
-        include("dependencies.cmake")
-        add_definitions(/WX)
-        set(CMAKE_EXE_LINKER_FLAGS ${CMAKE_EXE_LINKER_FLAGS_PREV})
-        set(CMAKE_SHARED_LINKER_FLAGS ${CMAKE_SHARED_LINKER_FLAGS_PREV})
-        set(CMAKE_MODULE_LINKER_FLAGS ${CMAKE_MODULE_LINKER_FLAGS_PREV})
-        set(CMAKE_STATIC_LINKER_FLAGS ${CMAKE_STATIC_LINKER_FLAGS_PREV})
-
-        string(REPLACE "/W0" "/W4" CMAKE_C_FLAGS ${CMAKE_C_FLAGS})
-        string(REPLACE "/W0" "/W4" CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS})
-
-    elseif(UNIX) #LINUX AND APPLE
-        #because libwebsockets is sensitive to -Werror, it shall be removed, and re-added after
-        if(CMAKE_C_FLAGS)
-            set(RESTORE_CMAKE_C_FLAGS ON)
-            string(REPLACE "-Werror" "" CMAKE_C_FLAGS ${CMAKE_C_FLAGS})
-            if(NOT IN_OPENWRT)
-                string(REPLACE "-D_POSIX_C_SOURCE=200112L" "" CMAKE_C_FLAGS ${CMAKE_C_FLAGS})
-            endif()
-        endif()
-        if(CMAKE_CXX_FLAGS)
-            set(RESTORE_CMAKE_CXX_FLAGS ON)
-            string(REPLACE "-Werror" "" CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS})
-        endif()
-        
-        include("dependencies.cmake")
-
-        if(RESTORE_CMAKE_C_FLAGS)
-            set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Werror")
-            if(NOT IN_OPENWRT)
-                set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -D_POSIX_C_SOURCE=200112L")
-            endif()
-        endif()
-        if(RESTORE_CMAKE_CXX_FLAGS)
-            set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Werror")
-        endif()
-
     endif()
 endif()
 
@@ -281,11 +224,18 @@ endif()
 #this function takes care of three things:
 #1. copying some shared libraries(.dll or .so) to the location of the output executable
 
+include(CheckCXXCompilerFlag)
+CHECK_CXX_COMPILER_FLAG("-std=c++11" CXX_FLAG_CXX11)
+
 macro(compileAsC99)
   if (CMAKE_VERSION VERSION_LESS "3.1")
     if (CMAKE_C_COMPILER_ID STREQUAL "GNU")
       set (CMAKE_C_FLAGS "--std=c99 ${CMAKE_C_FLAGS}")
-      set (CMAKE_CXX_FLAGS "--std=c++11 ${CMAKE_CXX_FLAGS}")
+      if (CXX_FLAG_CXX11)
+        set (CMAKE_CXX_FLAGS "--std=c++11 ${CMAKE_CXX_FLAGS}")
+      else()
+        set (CMAKE_CXX_FLAGS "--std=c++0x ${CMAKE_CXX_FLAGS}")
+      endif()
     endif()
   else()
     set (CMAKE_C_STANDARD 99)
@@ -294,15 +244,25 @@ macro(compileAsC99)
 endmacro(compileAsC99)
 
 macro(compileAsC11)
-  if (CMAKE_VERSION VERSION_LESS "3.1")
-    if (CMAKE_C_COMPILER_ID STREQUAL "GNU")
-      set (CMAKE_C_FLAGS "--std=c11 ${CMAKE_C_FLAGS}")
-      set (CMAKE_C_FLAGS "-D_POSIX_C_SOURCE=200112L ${CMAKE_C_FLAGS}")
-      set (CMAKE_CXX_FLAGS "--std=c++11 ${CMAKE_CXX_FLAGS}")
+  if (CXX_FLAG_CXX11)
+    if (CMAKE_VERSION VERSION_LESS "3.1")
+      if (CMAKE_C_COMPILER_ID STREQUAL "GNU")
+        set (CMAKE_C_FLAGS "--std=c11 ${CMAKE_C_FLAGS}")
+        set (CMAKE_C_FLAGS "-D_POSIX_C_SOURCE=200112L ${CMAKE_C_FLAGS}")
+        set (CMAKE_CXX_FLAGS "--std=c++11 ${CMAKE_CXX_FLAGS}")
+      endif()
+    else()
+      set (CMAKE_C_STANDARD 11)
+      set (CMAKE_CXX_STANDARD 11)
     endif()
   else()
-    set (CMAKE_C_STANDARD 11)
-    set (CMAKE_CXX_STANDARD 11)
+    if (CMAKE_C_COMPILER_ID STREQUAL "GNU")
+        set (CMAKE_C_FLAGS "--std=c99 ${CMAKE_C_FLAGS}")
+        set (CMAKE_CXX_FLAGS "--std=c++0x ${CMAKE_CXX_FLAGS}")
+    else()
+      set (CMAKE_C_STANDARD 11)
+      set (CMAKE_CXX_STANDARD 11)
+    endif()
   endif()
 endmacro(compileAsC11)
 
@@ -446,9 +406,15 @@ set(source_h_files
 if(${use_wsio})
     set(source_h_files ${source_h_files}
         ./inc/azure_c_shared_utility/wsio.h
+        ./inc/azure_c_shared_utility/uws_client.h
+        ./inc/azure_c_shared_utility/uws_frame_encoder.h
+        ./inc/azure_c_shared_utility/utf8_checker.h
     )
     set(source_c_files ${source_c_files}
         ./src/wsio.c
+        ./src/uws_client.c
+        ./src/uws_frame_encoder.c
+        ./src/utf8_checker.c
     )
 endif()
 

@@ -18,6 +18,15 @@ in the `SSL_Socket_Create` call defined in `ssl_socket.h`.
 
 ###  Exposed API
 
+**SRS_SSL_SOCKET_COMPACT_30_001: [** The ssl_socket_compact shall use the constants defined in `ssl_socket.h`.
+```c
+#define AZURE_SSL_SOCKET_SO_KEEPALIVE 1    /* enable keepalive */
+#define AZURE_SSL_SOCKET_TCP_KEEPIDLE 20   /* seconds */
+#define AZURE_SSL_SOCKET_TCP_KEEPINTVL 2   /* seconds */
+#define AZURE_SSL_SOCKET_TCP_KEEPCNT 3     /* retry count */
+```
+**]**
+
 **SRS_SSL_SOCKET_COMPACT_30_001: [** The ssl_socket_compact shall implement the methods defined in `ssl_socket.h`.
 ```c
 int SSL_Socket_Create(const char* hostname, int port);
@@ -37,14 +46,14 @@ int SSL_Socket_Create(const char* hostname, int port);
 
 **SRS_SSL_SOCKET_COMPACT_30_002: [** The `hostname` parameter shall be the fully-qualified domain name (FQDN) of the target server. Example: azure-iot-team.azure-devices.net **]**  
 **SRS_SSL_SOCKET_COMPACT_30_003: [** The `port` shall be the TCP port number for the target server. **]**
-**SRS_SSL_SOCKET_COMPACT_30_004: [** The `SO_KEEPALIVE` option value of the returned socket shall be 1. **]**
- **SRS_SSL_SOCKET_COMPACT_30_005: [** The `TCP_KEEPIDLE` option value of the returned socket shall be 20. **]**
- **SRS_SSL_SOCKET_COMPACT_30_006: [** The `TCP_KEEPINTVL` option value of the returned socket shall be 2. **]**
- **SRS_SSL_SOCKET_COMPACT_30_007: [** The `TCP_KEEPCNT` option value of the returned socket shall be 3. **]**
- **SRS_SSL_SOCKET_COMPACT_30_008: [** The returned socket shall be set to `O_NONBLOCK`. **]**
- **SRS_SSL_SOCKET_COMPACT_30_009: [** If the `hostname` cannot be resolved by DNS lookup, `SSL_Socket_Create` shall return -1. **]**  
- **SRS_SSL_SOCKET_COMPACT_30_010: [** If socket binding fails, `SSL_Socket_Create` shall return -1. **]**  
- **SRS_SSL_SOCKET_COMPACT_30_011: [** If socket connection fails, `SSL_Socket_Create` shall return -1. **]**
+**SRS_SSL_SOCKET_COMPACT_30_004: [** The `SO_KEEPALIVE` option value of the returned socket shall be `AZURE_SSL_SOCKET_SO_KEEPALIVE`. **]**
+**SRS_SSL_SOCKET_COMPACT_30_005: [** The `TCP_KEEPIDLE` option value of the returned socket shall be `AZURE_SSL_SOCKET_TCP_KEEPIDLE`. **]**
+**SRS_SSL_SOCKET_COMPACT_30_006: [** The `TCP_KEEPINTVL` option value of the returned socket shall be `AZURE_SSL_SOCKET_TCP_KEEPINTVL`. **]**
+**SRS_SSL_SOCKET_COMPACT_30_007: [** The `TCP_KEEPCNT` option value of the returned socket shall be `AZURE_SSL_SOCKET_TCP_KEEPCNT`. **]**
+**SRS_SSL_SOCKET_COMPACT_30_008: [** The returned socket shall be set to `O_NONBLOCK`. **]**
+**SRS_SSL_SOCKET_COMPACT_30_009: [** If the `hostname` cannot be resolved by DNS lookup, `SSL_Socket_Create` shall return -1. **]**  
+**SRS_SSL_SOCKET_COMPACT_30_010: [** If socket binding fails, `SSL_Socket_Create` shall return -1. **]**  
+**SRS_SSL_SOCKET_COMPACT_30_011: [** If socket connection fails, `SSL_Socket_Create` shall return -1. **]**
 
 
  ###  SSL_Socket_Close
