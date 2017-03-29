@@ -47,6 +47,7 @@ void my_gballoc_free(void* ptr)
 #include "umock_c_negative_tests.h"
 #include "azure_c_shared_utility/macro_utils.h"
 #include "azure_c_shared_utility/threadapi.h"
+#include "azure_c_shared_utility/tlsio.h"
 
 /**
  * Include the mockable headers here.
@@ -282,10 +283,10 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
 #endif
 
 	/* Tests_SRS_TEMPLATE_21_001: [ The target_create shall call callee_open to do stuff and allocate the memory. ]*/
-	TEST_FUNCTION(target_create_call_callee_open__succeed)
+	TEST_FUNCTION(tlsio_openssl_create__succeed)
 	{
 		///arrange
-		//TARGET_RESULT result;
+		CONCRETE_IO_HANDLE result;
 
 		/**
 		* The STRICT_EXPECTED_CALL creates a list of functions that we expect that the target calls.
@@ -301,8 +302,10 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
 		//STRICT_EXPECTED_CALL(gballoc_malloc(IGNORED_NUM_ARG)).IgnoreArgument(1);    //This is the malloc in the target_create().
 		//STRICT_EXPECTED_CALL(gballoc_free(IGNORED_PTR_ARG)).IgnoreArgument(1);      //This is the free in the target_create().
 
-																					///act
-		//result = target_create(SIZEOF_FOO_MEMORY);
+																		
+		///act
+		TLSIO_CONFIG config;
+		result = tlsio_openssl_create(&config);
 
 		///assert
 		//ASSERT_ARE_EQUAL(int, TARGET_RESULT_OK, result);
