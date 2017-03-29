@@ -402,7 +402,7 @@ int tlsio_openssl_send(CONCRETE_IO_HANDLE tls_io, const void* buffer, size_t siz
 			}
 			else
 			{
-				int total_written = 0;
+				size_t total_written = 0;
 				int res = 0;
 
 				while (size > 0)
@@ -487,12 +487,16 @@ void tlsio_openssl_dowork(CONCRETE_IO_HANDLE tls_io)
 /* Codes_SRS_TLSIO_SSL_ESP8266_99_002: [ The tlsio_arduino_setoption shall not do anything, and return 0. ]*/
 int tlsio_openssl_setoption(CONCRETE_IO_HANDLE tls_io, const char* optionName, const void* value)
 {
+	tls_io;
+	value;
+	optionName;
 	return 0;
 }
 
 /* Codes_SRS_TLSIO_SSL_ESP8266_99_001: [ The tlsio_openssl_retrieveoptions shall not do anything, and return NULL. ]*/
 static OPTIONHANDLER_HANDLE tlsio_openssl_retrieveoptions(CONCRETE_IO_HANDLE handle)
 {
+	handle;
 	OPTIONHANDLER_HANDLE result = NULL;
 	return result;
 }
