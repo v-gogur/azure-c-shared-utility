@@ -10,6 +10,7 @@
 
 #include <stdio.h>
 #include <stdbool.h>
+#include "azure_c_shared_utility/gballoc.h"
 #include "azure_c_shared_utility/tlsio.h"
 #include "azure_c_shared_utility/xlogging.h"
 #include "azure_c_shared_utility/crt_abstractions.h"
@@ -38,10 +39,8 @@ typedef enum TLSIO_STATE_TAG
 typedef struct TLS_IO_INSTANCE_TAG
 {
 	ON_BYTES_RECEIVED on_bytes_received;
-	ON_IO_CLOSE_COMPLETE on_io_close_complete;
 	ON_IO_ERROR on_io_error;
 	void* on_bytes_received_context;
-	void* on_io_close_complete_context;
 	void* on_io_error_context;
 	SSL* ssl;
 	SSL_CTX* ssl_context;
@@ -86,7 +85,7 @@ static void destroy_openssl_connection_members(TLS_IO_INSTANCE* tls_io_instance)
 		SSL_CTX_free(tls_io_instance->ssl_context);
 		tls_io_instance->ssl_context = NULL;
 	}
-	if (tls_io_instance->sock < 0)
+	if (tls_io_instance->sock >= 0)
 	{
 		SSL_Socket_Close(tls_io_instance->sock);
 		tls_io_instance->sock = -1;
@@ -206,30 +205,35 @@ static int create_and_connect_ssl(TLS_IO_INSTANCE* tls_io_instance)
 	return result;
 }
 
-/* Codes_SRS_TLSIO_SSL_ESP8266_99_005: [ The tlsio_openssl_create succeed. ]*/
+/* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_009: [ The tlsio_openssl_compact_create shall allocate, initialize, and return an instance of the tlsio for compact OpenSSL. ]*/
 CONCRETE_IO_HANDLE tlsio_openssl_create(void* io_create_parameters)
 {
+	/* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_005: [ The tlsio_openssl_compact shall receive the connection information using the TLSIO_CONFIG structure defined in tlsio.h ]*/
+	/* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_012: [ The tlsio_openssl_compact_create shall receive the connection configuration (TLSIO_CONFIG). ]*/
 	TLSIO_CONFIG* tls_io_config = (TLSIO_CONFIG*)io_create_parameters;
 	TLS_IO_INSTANCE* result = NULL;
 
-	/* Codes_SRS_TLSIO_SSL_ESP8266_99_003: [ The tlsio_openssl_create shall return NULL when io_create_parameters is NULL. ]*/
+	/* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_013: [ If the io_create_parameters value is NULL, tlsio_openssl_compact_create shall log an error and return NULL. ]*/
 	if (io_create_parameters == NULL)
 	{
 		LogError("NULL tls_io_config.");
 	}
 	else
 	{
-		result = malloc(sizeof(TLS_IO_INSTANCE));
-		if (!result)
+		/* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_014: [ The tlsio_openssl_compact_create shall convert the provided hostName to an IPv4 address. ]*/
+		uint32_t ipV4 = SSL_Get_IPv4(tls_io_config->hostname);
+		if (ipV4 == 0)
 		{
-			LogError("Failed to allocate tlsio instance.");
+			/* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_015: [ If the IP for the hostName cannot be found, tlsio_openssl_compact_create shall return NULL. ]*/
+			LogInfo("Could not get IPv4 for %s", tls_io_config->hostname);
 		}
 		else
 		{
-			uint32_t ipV4 = SSL_Get_IPv4(tls_io_config->hostname);
-			if (ipV4 == 0)
+			result = malloc(sizeof(TLS_IO_INSTANCE));
+			if (!result)
 			{
-				LogInfo("Could not get IPv4 for %s", tls_io_config->hostname);
+				/* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_010: [ If the allocation fails, tlsio_openssl_compact_create shall return NULL. ]*/
+				LogError("Failed to allocate tlsio instance.");
 			}
 			else
 			{
@@ -243,12 +247,9 @@ CONCRETE_IO_HANDLE tlsio_openssl_create(void* io_create_parameters)
 				result->ssl = NULL;
 				result->certificate = NULL;
 
+				/* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_011: [ The tlsio_openssl_compact_create shall initialize all internal callback pointers as NULL. ]*/
 				result->on_bytes_received = NULL;
 				result->on_bytes_received_context = NULL;
-
-				result->on_io_close_complete = NULL;
-				result->on_io_close_complete_context = NULL;
-
 				result->on_io_error = NULL;
 				result->on_io_error_context = NULL;
 
@@ -364,15 +365,12 @@ int tlsio_openssl_close(CONCRETE_IO_HANDLE tls_io, ON_IO_CLOSE_COMPLETE on_io_cl
 		}
 		else
 		{
-			tls_io_instance->on_io_close_complete = on_io_close_complete;
-			tls_io_instance->on_io_close_complete_context = callback_context;
-
 			(void)SSL_shutdown(tls_io_instance->ssl);
 			destroy_openssl_connection_members(tls_io_instance);
 			tls_io_instance->tlsio_state = TLSIO_STATE_NOT_OPEN;
-			if (tls_io_instance->on_io_close_complete != NULL)
+			if (on_io_close_complete != NULL)
 			{
-				tls_io_instance->on_io_close_complete(tls_io_instance->on_io_close_complete_context);
+				on_io_close_complete(callback_context);
 			}
 		}
 	}
@@ -484,7 +482,7 @@ void tlsio_openssl_dowork(CONCRETE_IO_HANDLE tls_io)
 	}
 }
 
-/* Codes_SRS_TLSIO_SSL_ESP8266_99_002: [ The tlsio_arduino_setoption shall not do anything, and return 0. ]*/
+/* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_052 [ The tlsio_openssl_compact_setoption shall do nothing and return 0. ]*/
 int tlsio_openssl_setoption(CONCRETE_IO_HANDLE tls_io, const char* optionName, const void* value)
 {
 	tls_io;
@@ -493,7 +491,7 @@ int tlsio_openssl_setoption(CONCRETE_IO_HANDLE tls_io, const char* optionName, c
 	return 0;
 }
 
-/* Codes_SRS_TLSIO_SSL_ESP8266_99_001: [ The tlsio_openssl_retrieveoptions shall not do anything, and return NULL. ]*/
+/* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_053: [ The tlsio_openssl_compact_retrieveoptions shall do nothing and return NULL. ]*/
 static OPTIONHANDLER_HANDLE tlsio_openssl_retrieveoptions(CONCRETE_IO_HANDLE handle)
 {
 	handle;
@@ -501,6 +499,7 @@ static OPTIONHANDLER_HANDLE tlsio_openssl_retrieveoptions(CONCRETE_IO_HANDLE han
 	return result;
 }
 
+/* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_008: [ The tlsio_get_interface_description shall return the VTable IO_INTERFACE_DESCRIPTION. ]*/
 static const IO_INTERFACE_DESCRIPTION tlsio_openssl_interface_description =
 {
 	tlsio_openssl_retrieveoptions,
@@ -513,7 +512,8 @@ static const IO_INTERFACE_DESCRIPTION tlsio_openssl_interface_description =
 	tlsio_openssl_setoption
 };
 
-const IO_INTERFACE_DESCRIPTION* tlsio_openssl_get_interface_description(void)
+/* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_001: [ The tlsio_openssl_compact shall implement and export all the Concrete functions in the VTable IO_INTERFACE_DESCRIPTION defined in the xio.h. ]*/
+const IO_INTERFACE_DESCRIPTION* tlsio_get_interface_description(void)
 {
 	return &tlsio_openssl_interface_description;
 }

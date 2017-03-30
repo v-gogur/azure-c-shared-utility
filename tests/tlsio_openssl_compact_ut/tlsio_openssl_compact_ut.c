@@ -48,6 +48,7 @@ void my_gballoc_free(void* ptr)
 #include "azure_c_shared_utility/macro_utils.h"
 #include "azure_c_shared_utility/threadapi.h"
 #include "azure_c_shared_utility/tlsio.h"
+#include "azure_c_shared_utility/xio.h"
 
 /**
  * Include the mockable headers here.
@@ -187,11 +188,11 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
          *    the failed cases, it will return NULL.
          */
         //REGISTER_GLOBAL_MOCK_FAIL_RETURN(callee_open, NULL);    // Fail return for the callee_open.
-        //REGISTER_GLOBAL_MOCK_HOOK(gballoc_malloc, my_gballoc_malloc);
-        //REGISTER_GLOBAL_MOCK_FAIL_RETURN(gballoc_malloc, NULL);
+        REGISTER_GLOBAL_MOCK_HOOK(gballoc_malloc, my_gballoc_malloc);
+        REGISTER_GLOBAL_MOCK_FAIL_RETURN(gballoc_malloc, NULL);
         //REGISTER_GLOBAL_MOCK_HOOK(gballoc_realloc, my_gballoc_realloc);
         //REGISTER_GLOBAL_MOCK_FAIL_RETURN(gballoc_realloc, NULL);
-        //REGISTER_GLOBAL_MOCK_HOOK(gballoc_free, my_gballoc_free);
+        REGISTER_GLOBAL_MOCK_HOOK(gballoc_free, my_gballoc_free);
 
         /**
          * You can initialize other global variables here, for instance image that you have a standard void* that will be converted
@@ -283,10 +284,10 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
 #endif
 
 	/* Tests_SRS_TEMPLATE_21_001: [ The target_create shall call callee_open to do stuff and allocate the memory. ]*/
-	TEST_FUNCTION(tlsio_openssl_create__succeed)
+	TEST_FUNCTION(tlsio_openssl_create_and_destroy__succeed)
 	{
 		///arrange
-		CONCRETE_IO_HANDLE result;
+		//CONCRETE_IO_HANDLE result;
 
 		/**
 		* The STRICT_EXPECTED_CALL creates a list of functions that we expect that the target calls.
@@ -297,17 +298,33 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
 		*   called functions.
 		* The function umock_c_get_actual_calls() return this list as a serialized string.
 		*/
-		//STRICT_EXPECTED_CALL(callee_open(SIZEOF_FOO_MEMORY));
-		//STRICT_EXPECTED_CALL(gballoc_malloc(SIZEOF_FOO_MEMORY));    //This is the malloc in the mock my_callee_open().
-		//STRICT_EXPECTED_CALL(gballoc_malloc(IGNORED_NUM_ARG)).IgnoreArgument(1);    //This is the malloc in the target_create().
-		//STRICT_EXPECTED_CALL(gballoc_free(IGNORED_PTR_ARG)).IgnoreArgument(1);      //This is the free in the target_create().
+		STRICT_EXPECTED_CALL(SSL_Get_IPv4(IGNORED_NUM_ARG)).IgnoreArgument(1);    // This is the malloc of TLS_IO_INSTANCE.
+		STRICT_EXPECTED_CALL(gballoc_malloc(IGNORED_NUM_ARG)).IgnoreArgument(1);    // This is the malloc of TLS_IO_INSTANCE.
+																					
+		STRICT_EXPECTED_CALL(gballoc_free(IGNORED_PTR_ARG)).IgnoreArgument(1);      //This is the free of TLS_IO_INSTANCE.
 
 																		
 		///act
+		const IO_INTERFACE_DESCRIPTION* tlsio = tlsio_get_interface_description();
 		TLSIO_CONFIG config;
-		result = tlsio_openssl_create(&config);
+		config.hostname = "fakehost.com";
+		config.port = 447;
+
+		CONCRETE_IO_HANDLE result = tlsio->concrete_io_create(&config);
+		tlsio->concrete_io_destroy(result);
 
 		///assert
+		/* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_001: [ The tlsio_openssl_compact shall implement and export all the Concrete functions in the VTable IO_INTERFACE_DESCRIPTION defined in the xio.h. ] */
+		ASSERT_IS_NOT_NULL(tlsio->concrete_io_close);
+		ASSERT_IS_NOT_NULL(tlsio->concrete_io_create);
+		ASSERT_IS_NOT_NULL(tlsio->concrete_io_destroy);
+		ASSERT_IS_NOT_NULL(tlsio->concrete_io_dowork);
+		ASSERT_IS_NOT_NULL(tlsio->concrete_io_open);
+		ASSERT_IS_NOT_NULL(tlsio->concrete_io_retrieveoptions);
+		ASSERT_IS_NOT_NULL(tlsio->concrete_io_send);
+		ASSERT_IS_NOT_NULL(tlsio->concrete_io_setoption);
+
+
 		//ASSERT_ARE_EQUAL(int, TARGET_RESULT_OK, result);
 		/**
 		* The follow assert will compare the expected calls with the actual calls. If it is different,
