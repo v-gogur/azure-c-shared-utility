@@ -118,7 +118,8 @@ static int create_and_connect_ssl(TLS_IO_INSTANCE* tls_io_instance)
 
 	int sock = SSL_Socket_Create(tls_io_instance->host_address, tls_io_instance->port);
 	if (sock < 0) {
-		// Error logging already happened
+		// This is a communication interruption rather than a program bug
+		LogInfo("Could not open the socket");
 		result = __FAILURE__;
 	}
 	else
@@ -173,6 +174,8 @@ static int create_and_connect_ssl(TLS_IO_INSTANCE* tls_io_instance)
 					{
 						int connect_result = SSL_connect(tls_io_instance->ssl);
 
+						// The following note applies to the Espressif ESP32 implementation
+						// of OpenSSL:
 						// The manual pages seem to be incorrect. They say that 0 is a failure,
 						// but by experiment, 0 is the success result, at least when using
 						// SSL_set_fd instead of custom BIO.
@@ -330,7 +333,6 @@ int tlsio_openssl_open(CONCRETE_IO_HANDLE tls_io,
 
 				if (create_and_connect_ssl(tls_io_instance) != 0)
 				{
-					LogError("create_and_connect_ssl failed.");
 					set_error_state_with_callback(tls_io_instance);
 					result = __FAILURE__;
 				}

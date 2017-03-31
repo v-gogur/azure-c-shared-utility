@@ -107,9 +107,11 @@ static void on_io_error(void* context)
 #include "azure_c_shared_utility/ssl_socket.h"
 #include "openssl/ssl.h"
 #undef ENABLE_MOCKS
+
+// These functions must be available to call, but they have no effect
+// on 
 int TLSv1_2_client_method() { return 0; }
 void SSL_CTX_set_default_read_buffer_len(SSL_CTX* dummy, int dummy2) { dummy; dummy2; }
-int SSL_shutdown(SSL* dummy) { dummy; return 0; }
 void ThreadAPI_Sleep(unsigned int milliseconds) { milliseconds; return; }
 
 #define SSL_Get_IPv4_OK (uint32_t)0x11223344
@@ -118,13 +120,9 @@ void ThreadAPI_Sleep(unsigned int milliseconds) { milliseconds; return; }
 #define SSL_Good_Context_Ptr (SSL_CTX*)33
 #define SSL_Good_Socket 44
 
-// This simple pass-thru lets us control the SSL_get_error output with the prior
-// SSL_xxx call output
-int SSL_get_error(SSL* ssl, int last_error)
-{
-	ssl;
-	return last_error;
-}
+#include "ssl_errors.c"
+
+#include "fail_points.c"
 
  /**
   * You can create some global variables that your test will need in some way.
@@ -187,21 +185,8 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
         REGISTER_UMOCK_ALIAS_TYPE(SSL_CTX, void*);
 		REGISTER_UMOCK_ALIAS_TYPE(uint32_t, unsigned int);
 
-
-
 		REGISTER_GLOBAL_MOCK_RETURNS(SSL_Get_IPv4, SSL_Get_IPv4_OK, SSL_Get_IPv4_FAIL);
 		REGISTER_GLOBAL_MOCK_RETURNS(SSL_Socket_Create, SSL_Good_Socket, -1);
-		
-		//MOCKABLE_FUNCTION(, int, SSL_get_error, SSL*, ssl, int, lastReturn);
-		//MOCKABLE_FUNCTION(, int, SSL_set_fd, SSL*, dummy, int, dummy2);
-		//MOCKABLE_FUNCTION(, int, SSL_connect, SSL*, dummy);
-
-
-		//MOCKABLE_FUNCTION(, int, SSL_write, SSL*, dummy, uint8_t*, buffer, size_t, size);
-		//MOCKABLE_FUNCTION(, int, SSL_read, SSL*, dummy, uint8_t*, buffer, size_t, size);
-
-
-
 
 		REGISTER_GLOBAL_MOCK_RETURNS(SSL_new, SSL_Good_Ptr, NULL);
 		REGISTER_GLOBAL_MOCK_RETURNS(SSL_CTX_new, SSL_Good_Context_Ptr, NULL);
@@ -214,8 +199,6 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
          */
         REGISTER_GLOBAL_MOCK_HOOK(gballoc_malloc, my_gballoc_malloc);
         REGISTER_GLOBAL_MOCK_FAIL_RETURN(gballoc_malloc, NULL);
-        //REGISTER_GLOBAL_MOCK_HOOK(gballoc_realloc, my_gballoc_realloc);
-        //REGISTER_GLOBAL_MOCK_FAIL_RETURN(gballoc_realloc, NULL);
         REGISTER_GLOBAL_MOCK_HOOK(gballoc_free, my_gballoc_free);
 
         /**
@@ -265,82 +248,20 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
         TEST_MUTEX_RELEASE(g_testByTest);
     }
 
-	/* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_008: [ The tlsio_get_interface_description shall return the VTable IO_INTERFACE_DESCRIPTION. ]*/
-	TEST_FUNCTION(tlsio_openssl_create__tlsio_get_interface_description)
-	{
-		///act
-		const IO_INTERFACE_DESCRIPTION* tlsio_id = tlsio_get_interface_description();
-
-		///assert
-		/* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_001: [ The tlsio_openssl_compact shall implement and export all the Concrete functions in the VTable IO_INTERFACE_DESCRIPTION defined in the xio.h. ] */
-		// Later specific tests will verify the identity of each function
-		ASSERT_IS_NOT_NULL(tlsio_id->concrete_io_close);
-		ASSERT_IS_NOT_NULL(tlsio_id->concrete_io_create);
-		ASSERT_IS_NOT_NULL(tlsio_id->concrete_io_destroy);
-		ASSERT_IS_NOT_NULL(tlsio_id->concrete_io_dowork);
-		ASSERT_IS_NOT_NULL(tlsio_id->concrete_io_open);
-		ASSERT_IS_NOT_NULL(tlsio_id->concrete_io_retrieveoptions);
-		ASSERT_IS_NOT_NULL(tlsio_id->concrete_io_send);
-		ASSERT_IS_NOT_NULL(tlsio_id->concrete_io_setoption);
-	}
-
-	// This enum is defined here rather than at the top because it defines the behavior of the function directly below
-	// and is used nowhere else. This is a list of all the possible fail points plus the happy path for a 
-	// create/open/close/destroy sequence.
-	enum 
-	{ 
-		FP_NULL_CONFIG,		// supplying a null tlsio config to create
-		FP_DNS,				// DNS lookup fails
-		FP_TLSIO_MALLOC,	// tlsio instance malloc fails
-		// Create has succeeded here
-		FP_SOCKET_OPEN,		// creation of the TLS socket fails
-		FP_SSL_CTX_new,		//
-		FP_SSL_new,			//
-		FP_SSL_set_fd,		//
-		FP_SSL_connect,		//
-
-
-		FP_NONE
-	};
-
-	// FAIL_POINT means that the call is expected at the provided fail point and beyond,
-	// and the framework will fail the call the first time it hits it.
-	// The messy macro on line 2 of FAIL_POINT is the expansion of STRICT_EXPECTED_CALL
-#define FAIL_POINT(fp, call) if(fail_point >= fp) {  \
-	C2(get_auto_ignore_args_function_, call)(C2(umock_c_strict_expected_,call), #call);			\
-	fail_points[fp] = expected_call_count;	\
-	expected_call_count++;		\
-}
-
-	// NO_FAIL_POINT means that this call is expected everywhere past the provided
-	// failure point, and the framework will not fail the call.
-	// The messy macro on line 2 of FAIL_POINT is the expansion of STRICT_EXPECTED_CALL
-#define NO_FAIL_POINT(fp, call) if(fail_point > fp) {  \
-	C2(get_auto_ignore_args_function_, call)(C2(umock_c_strict_expected_,call), #call);			\
-	expected_call_count++;		\
-}
 
 
 
 	/* Tests_SRS_TEMPLATE_21_001: [ The target_create shall call callee_open to do stuff and allocate the memory. ]*/
 	TEST_FUNCTION(tlsio_openssl_create_and_open)
 	{
-		// fail_points is a lookup table that provides an index 
-		// to pass to umock_c_negative_tests_fail_call(0) given
-		// a provided fail point enum value. If the index is 255,
-		// that means don't call umock_c_negative_tests_fail_call().
-		uint16_t fail_points[FP_NONE + 1];
-		uint16_t expected_call_count = 0;
 
-
-		for (int fail_point = 0; fail_point <= FP_NONE; fail_point++)
+		for (int fail_point = 0; fail_point <= FP_FINAL_OK; fail_point++)
 		{
 			///arrange
 			reset_callback_context_records();
 			umock_c_reset_all_calls();
 
-			expected_call_count = 0;
-			memset(fail_points, 0xff, sizeof(fail_points));
+			InitFailPoints();
 
 			int negativeTestsInitResult = umock_c_negative_tests_init();
 			ASSERT_ARE_EQUAL(int, 0, negativeTestsInitResult);
@@ -355,7 +276,7 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
 			FAIL_POINT(FP_SSL_CTX_new, SSL_CTX_new(IGNORED_NUM_ARG));
 			FAIL_POINT(FP_SSL_new, SSL_new(IGNORED_NUM_ARG));
 			FAIL_POINT(FP_SSL_set_fd, SSL_set_fd(IGNORED_NUM_ARG, IGNORED_NUM_ARG));
-			FAIL_POINT(FP_SSL_connect, SSL_connect(IGNORED_NUM_ARG));
+			FAIL_POINT(FP_SSL_connect_0, SSL_connect(IGNORED_NUM_ARG));
 
 #if(false)
 			STRICT_EXPECTED_CALL(SSL_CTX_new(IGNORED_NUM_ARG));
@@ -385,6 +306,9 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
 				umock_c_negative_tests_fail_call(fail_index);
 			}
 
+			// Show the fail point description in the output for the sake of 
+			// human readability
+			fail_point_label_output(fail_point);
 
 			///act
 
@@ -412,8 +336,6 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
 				tlsio_id->concrete_io_destroy(tlsio);
 			}
 
-			printf("\n\nFail point: %d\n", fail_point);
-
 			///assert
 
 
@@ -427,6 +349,25 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
 			umock_c_negative_tests_deinit();
 
 		}
+	}
+
+	/* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_008: [ The tlsio_get_interface_description shall return the VTable IO_INTERFACE_DESCRIPTION. ]*/
+	TEST_FUNCTION(tlsio_openssl_create__tlsio_get_interface_description)
+	{
+		///act
+		const IO_INTERFACE_DESCRIPTION* tlsio_id = tlsio_get_interface_description();
+
+		///assert
+		/* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_001: [ The tlsio_openssl_compact shall implement and export all the Concrete functions in the VTable IO_INTERFACE_DESCRIPTION defined in the xio.h. ] */
+		// Later specific tests will verify the identity of each function
+		ASSERT_IS_NOT_NULL(tlsio_id->concrete_io_close);
+		ASSERT_IS_NOT_NULL(tlsio_id->concrete_io_create);
+		ASSERT_IS_NOT_NULL(tlsio_id->concrete_io_destroy);
+		ASSERT_IS_NOT_NULL(tlsio_id->concrete_io_dowork);
+		ASSERT_IS_NOT_NULL(tlsio_id->concrete_io_open);
+		ASSERT_IS_NOT_NULL(tlsio_id->concrete_io_retrieveoptions);
+		ASSERT_IS_NOT_NULL(tlsio_id->concrete_io_send);
+		ASSERT_IS_NOT_NULL(tlsio_id->concrete_io_setoption);
 	}
 
 END_TEST_SUITE(tlsio_openssl_compact_unittests)
