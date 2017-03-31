@@ -50,6 +50,45 @@ void my_gballoc_free(void* ptr)
 #include "azure_c_shared_utility/tlsio.h"
 #include "azure_c_shared_utility/xio.h"
 
+static bool on_io_open_complete_called;
+static bool on_io_open_complete_context_ok;
+static IO_OPEN_RESULT on_io_open_complete_result;
+static bool on_io_error_called;
+static bool on_io_error_context_ok;
+
+#define IO_OPEN_COMPLETE_CONTEXT (void*)55
+#define IO_ERROR_CONTEXT (void*)66
+#define IO_BYTES_RECEIVED_CONTEXT (void*)77
+
+static void reset_callback_context_records()
+{
+	on_io_open_complete_called = false;
+	on_io_open_complete_context_ok = false;
+	on_io_open_complete_result = -1;
+	on_io_error_called = false;
+	on_io_error_context_ok = false;
+}
+
+static void on_io_open_complete(void* context, IO_OPEN_RESULT open_result)
+{
+	on_io_open_complete_called = true;
+	on_io_open_complete_result = open_result;
+	on_io_open_complete_context_ok = context == IO_OPEN_COMPLETE_CONTEXT;
+}
+
+static void on_bytes_received(void* context, const unsigned char* buffer, size_t size)
+{
+	context;
+	buffer;
+	size;
+}
+
+static void on_io_error(void* context)
+{
+	on_io_error_called = true;
+	on_io_error_context_ok = context == IO_ERROR_CONTEXT;
+}
+
 /**
  * Include the mockable headers here.
  * These are the headers that contains the functions that you will replace to execute the test.
@@ -75,11 +114,14 @@ void ThreadAPI_Sleep(unsigned int milliseconds) { milliseconds; return; }
 
 #define SSL_Get_IPv4_OK (uint32_t)0x11223344
 #define SSL_Get_IPv4_FAIL 0
+#define SSL_Good_Ptr (void*)22
+#define SSL_Good_Context_Ptr (SSL_CTX*)33
+#define SSL_Good_Socket 44
 
  /**
   * You can create some global variables that your test will need in some way.
   */
-//static void* g_GenericPointer;
+static TLSIO_CONFIG tlsio_config = { .hostname = "fakehost.com",.port = 447 };
 
  /**
   * Umock error will helps you to identify errors in the test suite or in the way that you are 
@@ -93,32 +135,6 @@ static void on_umock_c_error(UMOCK_C_ERROR_CODE error_code)
     (void)snprintf(temp_str, sizeof(temp_str), "umock_c reported error :%s", ENUM_TO_STRING(UMOCK_C_ERROR_CODE, error_code));
     ASSERT_FAIL(temp_str);
 }
-
-#if false
-/**
- * Create the mock function that will replace your callee functions. 
- * For this example, we will replace the functions open and close of the callee. So we 
- *    need to create the mock functions my_callee_open(), and my_callee_close().
- */
-bool my_callee_open_must_succeed;   //This bool will manually determine the happy and unhappy paths.
-CALLEE_HANDLE my_callee_open(size_t a)
-{
-    void* result;
-    
-    if(my_callee_open_must_succeed)
-    {
-        // Do something like when callee_open succeed...
-        result = malloc(a);
-    }
-    else
-    {
-        // Do something like when callee_open failed...
-        result = NULL;
-    }
-    
-    return result;
-}
-#endif
 
 /**
  * This is necessary for the test suite, just keep as is.
@@ -161,33 +177,34 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
          */
         REGISTER_UMOCK_ALIAS_TYPE(SSL, void*);
         REGISTER_UMOCK_ALIAS_TYPE(SSL_CTX, void*);
+		REGISTER_UMOCK_ALIAS_TYPE(uint32_t, unsigned int);
 
-        /**
-         * It is necessary to replace all mockable functions by the mock functions that you created here.
-         * It will tell the test suite to call my_callee_open besides to call the real callee_open.
-         */
-		//REGISTER_GLOBAL_MOCK_HOOK(callee_open, my_callee_open);
 
-        /**
-         * If you don't care about what there is inside of the function in anyway, and you just need 
-         *   to control the function return you can use the REGISTER_GLOBAL_MOCK_RETURN and 
-         *   REGISTER_GLOBAL_MOCK_FAIL_RETURN.
-         *
-         * In the follow example, callee_bar_1 will always return CALLEE_RESULT_OK, so, we don't need to
-         *   create the unhappy return; and callee_bar_2 can return CALLEE_RESULT_OK or CALLEE_RESULT_FAIL.
-         */
-        //REGISTER_GLOBAL_MOCK_RETURN(callee_bar_1, CALLEE_RESULT_OK);
-        //REGISTER_GLOBAL_MOCK_RETURN(callee_bar_2, CALLEE_RESULT_OK);
-        //REGISTER_GLOBAL_MOCK_FAIL_RETURN(callee_bar_2, CALLEE_RESULT_FAIL);
 
-        REGISTER_GLOBAL_MOCK_RETURN(SSL_Get_IPv4, SSL_Get_IPv4_OK);
-        REGISTER_GLOBAL_MOCK_FAIL_RETURN(SSL_Get_IPv4, SSL_Get_IPv4_FAIL);
+		REGISTER_GLOBAL_MOCK_RETURNS(SSL_Get_IPv4, SSL_Get_IPv4_OK, SSL_Get_IPv4_FAIL);
+		REGISTER_GLOBAL_MOCK_RETURNS(SSL_Socket_Create, SSL_Good_Socket, -1);
+		
+		//MOCKABLE_FUNCTION(, int, SSL_get_error, SSL*, ssl, int, lastReturn);
+		//MOCKABLE_FUNCTION(, int, SSL_set_fd, SSL*, dummy, int, dummy2);
+		//MOCKABLE_FUNCTION(, int, SSL_connect, SSL*, dummy);
+
+
+		//MOCKABLE_FUNCTION(, int, SSL_write, SSL*, dummy, uint8_t*, buffer, size_t, size);
+		//MOCKABLE_FUNCTION(, int, SSL_read, SSL*, dummy, uint8_t*, buffer, size_t, size);
+
+
+
+
+		REGISTER_GLOBAL_MOCK_RETURNS(SSL_new, SSL_Good_Ptr, NULL);
+		REGISTER_GLOBAL_MOCK_RETURNS(SSL_CTX_new, SSL_Good_Context_Ptr, NULL);
+		REGISTER_GLOBAL_MOCK_RETURNS(SSL_set_fd, 1, 0);
+		REGISTER_GLOBAL_MOCK_RETURNS(SSL_connect, 0, -1);
+		;
 
         /**
          * Or you can combine, for example, in the success case malloc will call my_gballoc_malloc, and for
          *    the failed cases, it will return NULL.
          */
-        //REGISTER_GLOBAL_MOCK_FAIL_RETURN(callee_open, NULL);    // Fail return for the callee_open.
         REGISTER_GLOBAL_MOCK_HOOK(gballoc_malloc, my_gballoc_malloc);
         REGISTER_GLOBAL_MOCK_FAIL_RETURN(gballoc_malloc, NULL);
         //REGISTER_GLOBAL_MOCK_HOOK(gballoc_realloc, my_gballoc_realloc);
@@ -241,99 +258,154 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
         TEST_MUTEX_RELEASE(g_testByTest);
     }
 
-    // TODO: Add your unit test functions as in the example below:
-    TEST_FUNCTION(target_tlsio_openssl_create__succeed)
-    {
-
-    }
-#if false
-    /* Tests_SRS_TEMPLATE_21_001: [ The target_create shall call callee_open to do stuff and allocate the memory. ]*/
-    TEST_FUNCTION(target_create_call_callee_open__succeed)
-    {
-        ///arrange
-        TARGET_RESULT result;
-        
-        /**
-         * The STRICT_EXPECTED_CALL creates a list of functions that we expect that the target calls. 
-         * The function umock_c_get_expected_calls() returns this list as a serialized string.
-         * You can determine all parameters, with the expected value, or define that the argument must
-         *    be ignored by the test suite.
-         * During the execution, the suit will collect the same information, creating a second list of
-         *   called functions.
-         * The function umock_c_get_actual_calls() return this list as a serialized string.
-         */
-        STRICT_EXPECTED_CALL(callee_open(SIZEOF_FOO_MEMORY));
-        STRICT_EXPECTED_CALL(gballoc_malloc(SIZEOF_FOO_MEMORY));    //This is the malloc in the mock my_callee_open().
-        STRICT_EXPECTED_CALL(gballoc_malloc(IGNORED_NUM_ARG)).IgnoreArgument(1);    //This is the malloc in the target_create().
-        STRICT_EXPECTED_CALL(gballoc_free(IGNORED_PTR_ARG)).IgnoreArgument(1);      //This is the free in the target_create().
-
-        ///act
-        result = target_create(SIZEOF_FOO_MEMORY);
-
-        ///assert
-        ASSERT_ARE_EQUAL(int, TARGET_RESULT_OK, result);
-        /**
-         * The follow assert will compare the expected calls with the actual calls. If it is different, 
-         *    it will show the serialized strings with the differences in the log.
-         */
-        ASSERT_ARE_EQUAL(char_ptr, umock_c_get_expected_calls(), umock_c_get_actual_calls());
-
-        ///cleanup
-        target_destroy();
-    }
-#endif
-
-	/* Tests_SRS_TEMPLATE_21_001: [ The target_create shall call callee_open to do stuff and allocate the memory. ]*/
-	TEST_FUNCTION(tlsio_openssl_create_and_destroy__succeed)
+	/* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_008: [ The tlsio_get_interface_description shall return the VTable IO_INTERFACE_DESCRIPTION. ]*/
+	TEST_FUNCTION(tlsio_openssl_create__tlsio_get_interface_description)
 	{
-		///arrange
-		//CONCRETE_IO_HANDLE result;
-
-		/**
-		* The STRICT_EXPECTED_CALL creates a list of functions that we expect that the target calls.
-		* The function umock_c_get_expected_calls() returns this list as a serialized string.
-		* You can determine all parameters, with the expected value, or define that the argument must
-		*    be ignored by the test suite.
-		* During the execution, the suit will collect the same information, creating a second list of
-		*   called functions.
-		* The function umock_c_get_actual_calls() return this list as a serialized string.
-		*/
-		STRICT_EXPECTED_CALL(SSL_Get_IPv4(IGNORED_NUM_ARG)).IgnoreArgument(1);    // This is the malloc of TLS_IO_INSTANCE.
-		STRICT_EXPECTED_CALL(gballoc_malloc(IGNORED_NUM_ARG)).IgnoreArgument(1);    // This is the malloc of TLS_IO_INSTANCE.
-																					
-		STRICT_EXPECTED_CALL(gballoc_free(IGNORED_PTR_ARG)).IgnoreArgument(1);      //This is the free of TLS_IO_INSTANCE.
-
-																		
 		///act
-		const IO_INTERFACE_DESCRIPTION* tlsio = tlsio_get_interface_description();
-		TLSIO_CONFIG config;
-		config.hostname = "fakehost.com";
-		config.port = 447;
-
-		CONCRETE_IO_HANDLE result = tlsio->concrete_io_create(&config);
-		tlsio->concrete_io_destroy(result);
+		const IO_INTERFACE_DESCRIPTION* tlsio_id = tlsio_get_interface_description();
 
 		///assert
 		/* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_001: [ The tlsio_openssl_compact shall implement and export all the Concrete functions in the VTable IO_INTERFACE_DESCRIPTION defined in the xio.h. ] */
-		ASSERT_IS_NOT_NULL(tlsio->concrete_io_close);
-		ASSERT_IS_NOT_NULL(tlsio->concrete_io_create);
-		ASSERT_IS_NOT_NULL(tlsio->concrete_io_destroy);
-		ASSERT_IS_NOT_NULL(tlsio->concrete_io_dowork);
-		ASSERT_IS_NOT_NULL(tlsio->concrete_io_open);
-		ASSERT_IS_NOT_NULL(tlsio->concrete_io_retrieveoptions);
-		ASSERT_IS_NOT_NULL(tlsio->concrete_io_send);
-		ASSERT_IS_NOT_NULL(tlsio->concrete_io_setoption);
+		// Later specific tests will verify the identity of each function
+		ASSERT_IS_NOT_NULL(tlsio_id->concrete_io_close);
+		ASSERT_IS_NOT_NULL(tlsio_id->concrete_io_create);
+		ASSERT_IS_NOT_NULL(tlsio_id->concrete_io_destroy);
+		ASSERT_IS_NOT_NULL(tlsio_id->concrete_io_dowork);
+		ASSERT_IS_NOT_NULL(tlsio_id->concrete_io_open);
+		ASSERT_IS_NOT_NULL(tlsio_id->concrete_io_retrieveoptions);
+		ASSERT_IS_NOT_NULL(tlsio_id->concrete_io_send);
+		ASSERT_IS_NOT_NULL(tlsio_id->concrete_io_setoption);
+	}
+
+	// This enum is defined here rather than at the top because it defines the behavior of the function directly below
+	// and is used nowhere else.
+	enum 
+	{ 
+		FP_NULL_CONFIG,
+		FP_DNS,
+		FP_TLSIO_MALLOC,
+		// Create has succeeded here
+		//FP_SOCKET,
+
+		FP_NONE
+	};
+
+// The messy macro on line 2 of FAIL_POINT is the expansion of STRICT_EXPECTED_CALL
+#define FAIL_POINT(fp, call) if(fail_point >= fp) {  \
+	C2(get_auto_ignore_args_function_, call)(C2(umock_c_strict_expected_,call), #call);			\
+	fail_points[fp] = expected_call_count;	\
+	expected_call_count++;		\
+}
+
+	/* Tests_SRS_TEMPLATE_21_001: [ The target_create shall call callee_open to do stuff and allocate the memory. ]*/
+	TEST_FUNCTION(tlsio_openssl_create_and_open)
+	{
+		// fail_points is a lookup table that provides an index 
+		// to pass to umock_c_negative_tests_fail_call(0) given
+		// a provided fail point enum value. If the index is 255,
+		// that means don't call umock_c_negative_tests_fail_call().
+		uint16_t fail_points[FP_NONE];
+		uint16_t expected_call_count = 0;
+		memset(fail_points, 0xff, sizeof(fail_points));
 
 
-		//ASSERT_ARE_EQUAL(int, TARGET_RESULT_OK, result);
-		/**
-		* The follow assert will compare the expected calls with the actual calls. If it is different,
-		*    it will show the serialized strings with the differences in the log.
-		*/
-		ASSERT_ARE_EQUAL(char_ptr, umock_c_get_expected_calls(), umock_c_get_actual_calls());
+		for (int fail_point = 0; fail_point <= FP_DNS; fail_point++)
+		{
+			///arrange
+			reset_callback_context_records();
+			umock_c_reset_all_calls();
+			int negativeTestsInitResult = umock_c_negative_tests_init();
+			ASSERT_ARE_EQUAL(int, 0, negativeTestsInitResult);
 
-		///cleanup
-		//target_destroy();
+
+			// Create
+			FAIL_POINT(FP_DNS, SSL_Get_IPv4(IGNORED_NUM_ARG));
+			//FAIL_POINT(FP_TLSIO_MALLOC, gballoc_malloc(IGNORED_NUM_ARG));
+			//if (fail_point >= FP_DNS)
+			//{ 
+			//	STRICT_EXPECTED_CALL(SSL_Get_IPv4(IGNORED_NUM_ARG)); 
+			//	fail_points[FP_DNS] = expected_call_count;
+			//	expected_call_count++;
+			//}
+			//if (fail_point >= FP_TLSIO_MALLOC)	
+			//{ 
+			//	STRICT_EXPECTED_CALL(gballoc_malloc(IGNORED_NUM_ARG)); 
+			//	fail_points[FP_DNS] = expected_call_count;
+			//	expected_call_count++;
+			//}
+
+			// Open
+			//if (i >= FP_SOCKET)			{ STRICT_EXPECTED_CALL(SSL_Socket_Create(IGNORED_NUM_ARG, IGNORED_NUM_ARG)); }
+
+#if(false)
+			STRICT_EXPECTED_CALL(SSL_CTX_new(IGNORED_NUM_ARG));
+			STRICT_EXPECTED_CALL(SSL_new(SSL_Good_Context_Ptr));
+			STRICT_EXPECTED_CALL(SSL_set_fd(SSL_Good_Ptr, SSL_Good_Socket));
+			STRICT_EXPECTED_CALL(SSL_connect(SSL_Good_Ptr));
+
+			// Destroy SSL Connection Members
+			STRICT_EXPECTED_CALL(SSL_free(SSL_Good_Ptr));
+			STRICT_EXPECTED_CALL(SSL_CTX_free(SSL_Good_Context_Ptr));
+			STRICT_EXPECTED_CALL(SSL_Socket_Close(SSL_Good_Socket));
+#endif
+			if (fail_point > FP_TLSIO_MALLOC)
+			{
+				// Destroy
+				STRICT_EXPECTED_CALL(gballoc_free(IGNORED_PTR_ARG));      //This is the free of TLS_IO_INSTANCE.
+			}
+
+
+			umock_c_negative_tests_snapshot();
+
+			umock_c_negative_tests_reset();
+
+			uint16_t fail_index = fail_points[fail_point];
+			if (fail_index != 0xffff)
+			{
+				umock_c_negative_tests_fail_call(fail_index);
+			}
+
+
+			///act
+
+			const IO_INTERFACE_DESCRIPTION* tlsio_id = tlsio_get_interface_description();
+
+			TLSIO_CONFIG* cfg = fail_point == FP_NULL_CONFIG ? NULL : &tlsio_config;
+			CONCRETE_IO_HANDLE tlsio = tlsio_id->concrete_io_create(cfg);
+
+			if (fail_point <= FP_TLSIO_MALLOC)
+			{
+				ASSERT_IS_NULL(tlsio);
+			}
+
+			if (tlsio)
+			{
+				//int open_result = tlsio_id->concrete_io_open(tlsio, on_io_open_complete, IO_OPEN_COMPLETE_CONTEXT, on_bytes_received,
+				//	IO_BYTES_RECEIVED_CONTEXT, on_io_error, IO_ERROR_CONTEXT);
+				//open_result;
+
+				//ASSERT_IS_FALSE(on_io_error_called);
+				//ASSERT_IS_TRUE(on_io_open_complete_called);
+				//ASSERT_IS_TRUE(on_io_open_complete_context_ok);
+				//ASSERT_ARE_EQUAL(int, IO_OPEN_OK, on_io_open_complete_result);
+
+				tlsio_id->concrete_io_destroy(tlsio);
+			}
+
+
+			///assert
+
+
+			/**
+			* The follow assert will compare the expected calls with the actual calls. If it is different,
+			*    it will show the serialized strings with the differences in the log.
+			*/
+			ASSERT_ARE_EQUAL(char_ptr, umock_c_get_expected_calls(), umock_c_get_actual_calls());
+
+			///cleanup
+			umock_c_negative_tests_deinit();
+
+		}
 	}
 
 END_TEST_SUITE(tlsio_openssl_compact_unittests)
