@@ -286,7 +286,12 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
 		FP_DNS,				// DNS lookup fails
 		FP_TLSIO_MALLOC,	// tlsio instance malloc fails
 		// Create has succeeded here
-		//FP_SOCKET,			// creation of the TLS socket fails
+		FP_SOCKET,			// creation of the TLS socket fails
+		FP_SSL_CTX_new,		//
+		FP_SSL_new,			//
+		FP_SSL_set_fd,		//
+		FP_SSL_connect,		//
+
 
 		FP_NONE
 	};
@@ -325,21 +330,14 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
 			// Create
 			FAIL_POINT(FP_DNS, SSL_Get_IPv4(IGNORED_NUM_ARG));
 			FAIL_POINT(FP_TLSIO_MALLOC, gballoc_malloc(IGNORED_NUM_ARG));
-			//if (fail_point >= FP_DNS)
-			//{ 
-			//	STRICT_EXPECTED_CALL(SSL_Get_IPv4(IGNORED_NUM_ARG)); 
-			//	fail_points[FP_DNS] = expected_call_count;
-			//	expected_call_count++;
-			//}
-			//if (fail_point >= FP_TLSIO_MALLOC)	
-			//{ 
-			//	STRICT_EXPECTED_CALL(gballoc_malloc(IGNORED_NUM_ARG)); 
-			//	fail_points[FP_DNS] = expected_call_count;
-			//	expected_call_count++;
-			//}
 
 			// Open
 			//if (i >= FP_SOCKET)			{ STRICT_EXPECTED_CALL(SSL_Socket_Create(IGNORED_NUM_ARG, IGNORED_NUM_ARG)); }
+			FAIL_POINT(FP_SOCKET, SSL_Socket_Create(IGNORED_NUM_ARG, IGNORED_NUM_ARG));
+			FAIL_POINT(FP_SSL_CTX_new, SSL_CTX_new(IGNORED_NUM_ARG));
+			FAIL_POINT(FP_SSL_new, SSL_new(IGNORED_NUM_ARG));
+			FAIL_POINT(FP_SSL_set_fd, SSL_set_fd(IGNORED_NUM_ARG, IGNORED_NUM_ARG));
+			FAIL_POINT(FP_SSL_connect, SSL_connect(IGNORED_NUM_ARG));
 
 #if(false)
 			STRICT_EXPECTED_CALL(SSL_CTX_new(IGNORED_NUM_ARG));
@@ -384,9 +382,9 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
 
 			if (tlsio)
 			{
-				//int open_result = tlsio_id->concrete_io_open(tlsio, on_io_open_complete, IO_OPEN_COMPLETE_CONTEXT, on_bytes_received,
-				//	IO_BYTES_RECEIVED_CONTEXT, on_io_error, IO_ERROR_CONTEXT);
-				//open_result;
+				int open_result = tlsio_id->concrete_io_open(tlsio, on_io_open_complete, IO_OPEN_COMPLETE_CONTEXT, on_bytes_received,
+					IO_BYTES_RECEIVED_CONTEXT, on_io_error, IO_ERROR_CONTEXT);
+				open_result;
 
 				//ASSERT_IS_FALSE(on_io_error_called);
 				//ASSERT_IS_TRUE(on_io_open_complete_called);
@@ -405,6 +403,11 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
 			*    it will show the serialized strings with the differences in the log.
 			*/
 			ASSERT_ARE_EQUAL(char_ptr, umock_c_get_expected_calls(), umock_c_get_actual_calls());
+			if (fail_point == FP_NONE)
+			{
+				printf("\n\n");
+			}
+			printf("\n\n");
 
 			///cleanup
 			umock_c_negative_tests_deinit();
