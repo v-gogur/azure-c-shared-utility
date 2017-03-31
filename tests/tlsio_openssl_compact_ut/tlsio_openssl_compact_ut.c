@@ -278,14 +278,15 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
 	}
 
 	// This enum is defined here rather than at the top because it defines the behavior of the function directly below
-	// and is used nowhere else.
+	// and is used nowhere else. This is a list of all the possible fail points plus the happy path for a 
+	// create/open/close/destroy sequence.
 	enum 
 	{ 
-		FP_NULL_CONFIG,
-		FP_DNS,
-		FP_TLSIO_MALLOC,
+		FP_NULL_CONFIG,		// supplying a null tlsio config to create
+		FP_DNS,				// DNS lookup fails
+		FP_TLSIO_MALLOC,	// tlsio instance malloc fails
 		// Create has succeeded here
-		//FP_SOCKET,
+		//FP_SOCKET,			// creation of the TLS socket fails
 
 		FP_NONE
 	};
@@ -304,23 +305,26 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
 		// to pass to umock_c_negative_tests_fail_call(0) given
 		// a provided fail point enum value. If the index is 255,
 		// that means don't call umock_c_negative_tests_fail_call().
-		uint16_t fail_points[FP_NONE];
+		uint16_t fail_points[FP_NONE + 1];
 		uint16_t expected_call_count = 0;
-		memset(fail_points, 0xff, sizeof(fail_points));
 
 
-		for (int fail_point = 0; fail_point <= FP_DNS; fail_point++)
+		for (int fail_point = 0; fail_point <= FP_NONE; fail_point++)
 		{
 			///arrange
 			reset_callback_context_records();
 			umock_c_reset_all_calls();
+
+			expected_call_count = 0;
+			memset(fail_points, 0xff, sizeof(fail_points));
+
 			int negativeTestsInitResult = umock_c_negative_tests_init();
 			ASSERT_ARE_EQUAL(int, 0, negativeTestsInitResult);
 
 
 			// Create
 			FAIL_POINT(FP_DNS, SSL_Get_IPv4(IGNORED_NUM_ARG));
-			//FAIL_POINT(FP_TLSIO_MALLOC, gballoc_malloc(IGNORED_NUM_ARG));
+			FAIL_POINT(FP_TLSIO_MALLOC, gballoc_malloc(IGNORED_NUM_ARG));
 			//if (fail_point >= FP_DNS)
 			//{ 
 			//	STRICT_EXPECTED_CALL(SSL_Get_IPv4(IGNORED_NUM_ARG)); 
