@@ -286,7 +286,7 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
 		FP_DNS,				// DNS lookup fails
 		FP_TLSIO_MALLOC,	// tlsio instance malloc fails
 		// Create has succeeded here
-		FP_SOCKET,			// creation of the TLS socket fails
+		FP_SOCKET_OPEN,		// creation of the TLS socket fails
 		FP_SSL_CTX_new,		//
 		FP_SSL_new,			//
 		FP_SSL_set_fd,		//
@@ -296,12 +296,24 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
 		FP_NONE
 	};
 
-// The messy macro on line 2 of FAIL_POINT is the expansion of STRICT_EXPECTED_CALL
+	// FAIL_POINT means that the call is expected at the provided fail point and beyond,
+	// and the framework will fail the call the first time it hits it.
+	// The messy macro on line 2 of FAIL_POINT is the expansion of STRICT_EXPECTED_CALL
 #define FAIL_POINT(fp, call) if(fail_point >= fp) {  \
 	C2(get_auto_ignore_args_function_, call)(C2(umock_c_strict_expected_,call), #call);			\
 	fail_points[fp] = expected_call_count;	\
 	expected_call_count++;		\
 }
+
+	// NO_FAIL_POINT means that this call is expected everywhere past the provided
+	// failure point, and the framework will not fail the call.
+	// The messy macro on line 2 of FAIL_POINT is the expansion of STRICT_EXPECTED_CALL
+#define NO_FAIL_POINT(fp, call) if(fail_point > fp) {  \
+	C2(get_auto_ignore_args_function_, call)(C2(umock_c_strict_expected_,call), #call);			\
+	expected_call_count++;		\
+}
+
+
 
 	/* Tests_SRS_TEMPLATE_21_001: [ The target_create shall call callee_open to do stuff and allocate the memory. ]*/
 	TEST_FUNCTION(tlsio_openssl_create_and_open)
@@ -333,7 +345,7 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
 
 			// Open
 			//if (i >= FP_SOCKET)			{ STRICT_EXPECTED_CALL(SSL_Socket_Create(IGNORED_NUM_ARG, IGNORED_NUM_ARG)); }
-			FAIL_POINT(FP_SOCKET, SSL_Socket_Create(IGNORED_NUM_ARG, IGNORED_NUM_ARG));
+			FAIL_POINT(FP_SOCKET_OPEN, SSL_Socket_Create(IGNORED_NUM_ARG, IGNORED_NUM_ARG));
 			FAIL_POINT(FP_SSL_CTX_new, SSL_CTX_new(IGNORED_NUM_ARG));
 			FAIL_POINT(FP_SSL_new, SSL_new(IGNORED_NUM_ARG));
 			FAIL_POINT(FP_SSL_set_fd, SSL_set_fd(IGNORED_NUM_ARG, IGNORED_NUM_ARG));
@@ -350,11 +362,11 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
 			STRICT_EXPECTED_CALL(SSL_CTX_free(SSL_Good_Context_Ptr));
 			STRICT_EXPECTED_CALL(SSL_Socket_Close(SSL_Good_Socket));
 #endif
-			if (fail_point > FP_TLSIO_MALLOC)
-			{
 				// Destroy
-				STRICT_EXPECTED_CALL(gballoc_free(IGNORED_PTR_ARG));      //This is the free of TLS_IO_INSTANCE.
-			}
+			NO_FAIL_POINT(FP_SSL_new, SSL_free(IGNORED_PTR_ARG));
+			NO_FAIL_POINT(FP_SSL_CTX_new, SSL_CTX_free(IGNORED_PTR_ARG));
+			NO_FAIL_POINT(FP_SOCKET_OPEN, SSL_Socket_Close(IGNORED_NUM_ARG));
+			NO_FAIL_POINT(FP_TLSIO_MALLOC, gballoc_free(IGNORED_PTR_ARG));      //This is the free of TLS_IO_INSTANCE.
 
 
 			umock_c_negative_tests_snapshot();
@@ -394,6 +406,7 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
 				tlsio_id->concrete_io_destroy(tlsio);
 			}
 
+			printf("\n\nFail point: %d\n", fail_point);
 
 			///assert
 
@@ -403,11 +416,6 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
 			*    it will show the serialized strings with the differences in the log.
 			*/
 			ASSERT_ARE_EQUAL(char_ptr, umock_c_get_expected_calls(), umock_c_get_actual_calls());
-			if (fail_point == FP_NONE)
-			{
-				printf("\n\n");
-			}
-			printf("\n\n");
 
 			///cleanup
 			umock_c_negative_tests_deinit();
