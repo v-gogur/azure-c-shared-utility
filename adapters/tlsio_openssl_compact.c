@@ -194,7 +194,7 @@ static int create_and_connect_ssl(TLS_IO_INSTANCE* tls_io_instance)
 								// Connect failed, so delete the connection objects
 								done = true;
 								destroy_openssl_connection_members(tls_io_instance);
-								LogInfo("Error from SSL_connect: %d", hard_error);
+								LogInfo("Hard error from SSL_connect: %d", hard_error);
 							}
 						}
 

@@ -271,18 +271,32 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
 			FAIL_POINT(FP_SSL_CTX_new, SSL_CTX_new(IGNORED_NUM_ARG));
 			FAIL_POINT(FP_SSL_new, SSL_new(SSL_Good_Context_Ptr));
 			FAIL_POINT(FP_SSL_set_fd, SSL_set_fd(SSL_Good_Ptr, SSL_Good_Socket));
-			FAIL_POINT(FP_SSL_connect_0, SSL_connect(SSL_Good_Ptr));
+
+			// SSL_connect can succeed and fail in several different sequences
+			if (fail_point >= FP_SSL_connect_0)
+			{
+				switch (fail_point)
+				{
+					//case FP_SSL_connect_0:
+					//	break;
+				default:
+					SSL_ERROR_PREPARE_SEQUENCE(SSL_CONNECT_ERROR_SEQUENCE_0);
+					NO_FAIL_POINT(FP_SSL_connect_0, SSL_connect(SSL_Good_Ptr));
+					break;
+				}
+			}
+			//NO_FAIL_POINT(FP_SSL_connect_0, SSL_connect(SSL_Good_Ptr));
 
 
 
 
 
 			// Destroy SSL Connection Members
-			NO_FAIL_POINT(FP_SSL_new, SSL_free(SSL_Good_Ptr));
-			NO_FAIL_POINT(FP_SSL_CTX_new, SSL_CTX_free(SSL_Good_Context_Ptr));
-			NO_FAIL_POINT(FP_SOCKET_OPEN, SSL_Socket_Close(SSL_Good_Socket));
+			IF_PAST_FAIL_POINT(FP_SSL_new, SSL_free(SSL_Good_Ptr));
+			IF_PAST_FAIL_POINT(FP_SSL_CTX_new, SSL_CTX_free(SSL_Good_Context_Ptr));
+			IF_PAST_FAIL_POINT(FP_SOCKET_OPEN, SSL_Socket_Close(SSL_Good_Socket));
 			// Destroy
-			NO_FAIL_POINT(FP_TLSIO_MALLOC, gballoc_free(IGNORED_PTR_ARG));      //This is the free of TLS_IO_INSTANCE.
+			IF_PAST_FAIL_POINT(FP_TLSIO_MALLOC, gballoc_free(IGNORED_PTR_ARG));      //This is the free of TLS_IO_INSTANCE.
 
 
 			umock_c_negative_tests_snapshot();
@@ -316,6 +330,7 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
 				int open_result = tlsio_id->concrete_io_open(tlsio, on_io_open_complete, IO_OPEN_COMPLETE_CONTEXT, on_bytes_received,
 					IO_BYTES_RECEIVED_CONTEXT, on_io_error, IO_ERROR_CONTEXT);
 				// TODO: Add asserts for open_result plus callbacks
+				SSL_ERROR_ASSERT_RECENT_SEQUENCE();	// special checking for SSL_connect
 				open_result;
 
 				//ASSERT_IS_FALSE(on_io_error_called);

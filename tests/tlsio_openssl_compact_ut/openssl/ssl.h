@@ -19,8 +19,8 @@ extern "C" {
 typedef void SSL;
 typedef void SSL_CTX;
 
-#define SSL_ERROR_WANT_READ 3
-#define SSL_ERROR_WANT_WRITE 4
+#define SSL_ERROR_WANT_READ 2
+#define SSL_ERROR_WANT_WRITE 3
 
 int TLSv1_2_client_method();
 void SSL_CTX_set_default_read_buffer_len(SSL_CTX* dummy, int dummy2);

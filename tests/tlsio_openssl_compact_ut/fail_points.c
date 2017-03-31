@@ -85,10 +85,18 @@ static void InitFailPoints()
 	expected_call_count++;		\
 }
 
-// NO_FAIL_POINT means that this call is expected everywhere past the provided
+// NO_FAIL_POINT means that this call is expected at the provided fail point and beyond,
+// and the framework will not fail the call.
+// The messy macro on line 2 of NO_FAIL_POINT is the expansion of STRICT_EXPECTED_CALL
+#define NO_FAIL_POINT(fp, call) if(fail_point >= fp) {  \
+	C2(get_auto_ignore_args_function_, call)(C2(umock_c_strict_expected_,call), #call);			\
+	expected_call_count++;		\
+}
+
+// IF_PAST_FAIL_POINT means that this call is expected everywhere past the provided
 // failure point, and the framework will not fail the call.
-// The messy macro on line 2 of FAIL_POINT is the expansion of STRICT_EXPECTED_CALL
-#define NO_FAIL_POINT(fp, call) if(fail_point > fp) {  \
+// The messy macro on line 2 of IF_PAST_FAIL_POINT is the expansion of STRICT_EXPECTED_CALL
+#define IF_PAST_FAIL_POINT(fp, call) if(fail_point > fp) {  \
 	C2(get_auto_ignore_args_function_, call)(C2(umock_c_strict_expected_,call), #call);			\
 	expected_call_count++;		\
 }
