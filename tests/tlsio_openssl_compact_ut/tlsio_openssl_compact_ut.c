@@ -114,12 +114,6 @@ int TLSv1_2_client_method() { return 0; }
 void SSL_CTX_set_default_read_buffer_len(SSL_CTX* dummy, int dummy2) { dummy; dummy2; }
 void ThreadAPI_Sleep(unsigned int milliseconds) { milliseconds; return; }
 
-#define SSL_Get_IPv4_OK (uint32_t)0x11223344
-#define SSL_Get_IPv4_FAIL 0
-#define SSL_Good_Ptr (void*)22
-#define SSL_Good_Context_Ptr (SSL_CTX*)33
-#define SSL_Good_Socket 44
-
 #include "ssl_errors.c"
 
 #include "fail_points.c"
@@ -127,7 +121,7 @@ void ThreadAPI_Sleep(unsigned int milliseconds) { milliseconds; return; }
  /**
   * You can create some global variables that your test will need in some way.
   */
-static TLSIO_CONFIG tlsio_config = { .hostname = "fakehost.com",.port = 447 };
+static TLSIO_CONFIG tlsio_config = { .port = SSL_goood_port_number };
 
  /**
   * Umock error will helps you to identify errors in the test suite or in the way that you are 
@@ -191,7 +185,7 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
 		REGISTER_GLOBAL_MOCK_RETURNS(SSL_new, SSL_Good_Ptr, NULL);
 		REGISTER_GLOBAL_MOCK_RETURNS(SSL_CTX_new, SSL_Good_Context_Ptr, NULL);
 		REGISTER_GLOBAL_MOCK_RETURNS(SSL_set_fd, 1, 0);
-		REGISTER_GLOBAL_MOCK_RETURNS(SSL_connect, 0, -1);
+		REGISTER_GLOBAL_MOCK_HOOK(SSL_connect, my_SSL_connect);
 
         /**
          * Or you can combine, for example, in the success case malloc will call my_gballoc_malloc, and for
@@ -207,6 +201,7 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
          */
         //g_GenericPointer = malloc(1);
         //ASSERT_IS_NOT_NULL(g_GenericPointer);
+		tlsio_config.hostname = SSL_goood_host_name;
     }
 
     /**
@@ -268,31 +263,25 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
 
 
 			// Create
-			FAIL_POINT(FP_DNS, SSL_Get_IPv4(IGNORED_NUM_ARG));
+			FAIL_POINT(FP_DNS, SSL_Get_IPv4(SSL_goood_host_name));
 			FAIL_POINT(FP_TLSIO_MALLOC, gballoc_malloc(IGNORED_NUM_ARG));
 
 			// Open
-			FAIL_POINT(FP_SOCKET_OPEN, SSL_Socket_Create(IGNORED_NUM_ARG, IGNORED_NUM_ARG));
+			FAIL_POINT(FP_SOCKET_OPEN, SSL_Socket_Create(SSL_Get_IPv4_OK, SSL_goood_port_number));
 			FAIL_POINT(FP_SSL_CTX_new, SSL_CTX_new(IGNORED_NUM_ARG));
-			FAIL_POINT(FP_SSL_new, SSL_new(IGNORED_NUM_ARG));
-			FAIL_POINT(FP_SSL_set_fd, SSL_set_fd(IGNORED_NUM_ARG, IGNORED_NUM_ARG));
-			FAIL_POINT(FP_SSL_connect_0, SSL_connect(IGNORED_NUM_ARG));
+			FAIL_POINT(FP_SSL_new, SSL_new(SSL_Good_Context_Ptr));
+			FAIL_POINT(FP_SSL_set_fd, SSL_set_fd(SSL_Good_Ptr, SSL_Good_Socket));
+			FAIL_POINT(FP_SSL_connect_0, SSL_connect(SSL_Good_Ptr));
 
-#if(false)
-			STRICT_EXPECTED_CALL(SSL_CTX_new(IGNORED_NUM_ARG));
-			STRICT_EXPECTED_CALL(SSL_new(SSL_Good_Context_Ptr));
-			STRICT_EXPECTED_CALL(SSL_set_fd(SSL_Good_Ptr, SSL_Good_Socket));
-			STRICT_EXPECTED_CALL(SSL_connect(SSL_Good_Ptr));
+
+
+
 
 			// Destroy SSL Connection Members
-			STRICT_EXPECTED_CALL(SSL_free(SSL_Good_Ptr));
-			STRICT_EXPECTED_CALL(SSL_CTX_free(SSL_Good_Context_Ptr));
-			STRICT_EXPECTED_CALL(SSL_Socket_Close(SSL_Good_Socket));
-#endif
-				// Destroy
-			NO_FAIL_POINT(FP_SSL_new, SSL_free(IGNORED_PTR_ARG));
-			NO_FAIL_POINT(FP_SSL_CTX_new, SSL_CTX_free(IGNORED_PTR_ARG));
-			NO_FAIL_POINT(FP_SOCKET_OPEN, SSL_Socket_Close(IGNORED_NUM_ARG));
+			NO_FAIL_POINT(FP_SSL_new, SSL_free(SSL_Good_Ptr));
+			NO_FAIL_POINT(FP_SSL_CTX_new, SSL_CTX_free(SSL_Good_Context_Ptr));
+			NO_FAIL_POINT(FP_SOCKET_OPEN, SSL_Socket_Close(SSL_Good_Socket));
+			// Destroy
 			NO_FAIL_POINT(FP_TLSIO_MALLOC, gballoc_free(IGNORED_PTR_ARG));      //This is the free of TLS_IO_INSTANCE.
 
 
@@ -326,6 +315,7 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
 			{
 				int open_result = tlsio_id->concrete_io_open(tlsio, on_io_open_complete, IO_OPEN_COMPLETE_CONTEXT, on_bytes_received,
 					IO_BYTES_RECEIVED_CONTEXT, on_io_error, IO_ERROR_CONTEXT);
+				// TODO: Add asserts for open_result plus callbacks
 				open_result;
 
 				//ASSERT_IS_FALSE(on_io_error_called);
