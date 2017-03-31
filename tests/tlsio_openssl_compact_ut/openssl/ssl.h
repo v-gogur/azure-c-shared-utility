@@ -25,11 +25,11 @@ typedef void SSL_CTX;
 int TLSv1_2_client_method();
 void SSL_CTX_set_default_read_buffer_len(SSL_CTX* dummy, int dummy2);
 int SSL_shutdown(SSL* dummy);
+int SSL_get_error(SSL_CTX* dummy, int last_value);
 
 
 MOCKABLE_FUNCTION(, void, SSL_free, SSL*, ssl);
 MOCKABLE_FUNCTION(, void, SSL_CTX_free, SSL_CTX*, ctx);
-MOCKABLE_FUNCTION(, int, SSL_get_error, SSL*, ssl, int, lastReturn);
 MOCKABLE_FUNCTION(, SSL_CTX*, SSL_CTX_new, int, dummy);
 MOCKABLE_FUNCTION(, SSL*, SSL_new, SSL_CTX*, dummy);
 MOCKABLE_FUNCTION(, int, SSL_set_fd, SSL*, dummy, int, dummy2);

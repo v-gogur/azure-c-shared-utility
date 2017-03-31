@@ -118,6 +118,14 @@ void ThreadAPI_Sleep(unsigned int milliseconds) { milliseconds; return; }
 #define SSL_Good_Context_Ptr (SSL_CTX*)33
 #define SSL_Good_Socket 44
 
+// This simple pass-thru lets us control the SSL_get_error output with the prior
+// SSL_xxx call output
+int SSL_get_error(SSL* ssl, int last_error)
+{
+	ssl;
+	return last_error;
+}
+
  /**
   * You can create some global variables that your test will need in some way.
   */
@@ -199,7 +207,6 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
 		REGISTER_GLOBAL_MOCK_RETURNS(SSL_CTX_new, SSL_Good_Context_Ptr, NULL);
 		REGISTER_GLOBAL_MOCK_RETURNS(SSL_set_fd, 1, 0);
 		REGISTER_GLOBAL_MOCK_RETURNS(SSL_connect, 0, -1);
-		;
 
         /**
          * Or you can combine, for example, in the success case malloc will call my_gballoc_malloc, and for
@@ -344,7 +351,6 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
 			FAIL_POINT(FP_TLSIO_MALLOC, gballoc_malloc(IGNORED_NUM_ARG));
 
 			// Open
-			//if (i >= FP_SOCKET)			{ STRICT_EXPECTED_CALL(SSL_Socket_Create(IGNORED_NUM_ARG, IGNORED_NUM_ARG)); }
 			FAIL_POINT(FP_SOCKET_OPEN, SSL_Socket_Create(IGNORED_NUM_ARG, IGNORED_NUM_ARG));
 			FAIL_POINT(FP_SSL_CTX_new, SSL_CTX_new(IGNORED_NUM_ARG));
 			FAIL_POINT(FP_SSL_new, SSL_new(IGNORED_NUM_ARG));
