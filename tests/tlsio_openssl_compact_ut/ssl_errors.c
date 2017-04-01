@@ -58,6 +58,18 @@ static SSL_error_pair SSL_CONNECT_ERROR_SEQUENCE_1_impl[] =
 	{ -1, SSL_ERROR_HARD_FAIL, false },
 };
 
+static SSL_error_pair SSL_CONNECT_OK_ERROR_SEQUENCE_0_impl[] =
+{
+	{ 0, 0, true }		// success
+};
+
+static SSL_error_pair SSL_CONNECT_OK_ERROR_SEQUENCE_1_impl[] =
+{
+	{ -1, SSL_ERROR_WANT_READ, false },
+	{ -1, SSL_ERROR_WANT_WRITE, false },
+	{ 0, 0, true },		// success
+};
+
 void SSL_ERROR_ASSERT_RECENT_SEQUENCE()
 {
 	if (SSL_error_sequence_current_main_index != SSL_error_sequence_current_size ||
@@ -67,7 +79,11 @@ void SSL_ERROR_ASSERT_RECENT_SEQUENCE()
 	}
 }
 
-#define SSL_ERROR_SEQUENCE_CASE_ENTRY(seq)
+#define SSL_ERROR_SEQUENCE_CASE_ENTRY(seq) \
+	case seq :		\
+	SSL_error_current_sequence = seq ## _impl;		\
+	SSL_error_sequence_current_size = sizeof(seq ## _impl) / sizeof(SSL_error_pair);		\
+	break
 
 void SSL_ERROR_PREPARE_SEQUENCE(int sequence)
 {
@@ -77,13 +93,14 @@ void SSL_ERROR_PREPARE_SEQUENCE(int sequence)
 	SSL_error_sequence_current_extended_index = 0;
 	switch (sequence)
 	{
-	case SSL_CONNECT_ERROR_SEQUENCE_0: 
-		SSL_error_current_sequence = SSL_CONNECT_ERROR_SEQUENCE_0_impl;  
-		SSL_error_sequence_current_size = sizeof(SSL_CONNECT_ERROR_SEQUENCE_0_impl) / sizeof(SSL_error_pair);
-		break;
+		SSL_ERROR_SEQUENCE_CASE_ENTRY(SSL_CONNECT_ERROR_SEQUENCE_0);
+		SSL_ERROR_SEQUENCE_CASE_ENTRY(SSL_CONNECT_ERROR_SEQUENCE_1);
+		SSL_ERROR_SEQUENCE_CASE_ENTRY(SSL_CONNECT_OK_ERROR_SEQUENCE_0);
+		SSL_ERROR_SEQUENCE_CASE_ENTRY(SSL_CONNECT_OK_ERROR_SEQUENCE_1);
 
 		// this is a program bug
-	default: ASSERT_IS_FALSE(true);
+	default: 
+		ASSERT_FAIL("Unexpected value in SSL_ERROR_PREPARE_SEQUENCE");
 		break;
 	}
 }

@@ -14,20 +14,24 @@
 // to either succeed or fail at that fail point
 enum
 {
-						// tlsio_openssl_create
+							// tlsio_openssl_create
 
-	FP_NULL_CONFIG,		// supplying a null tlsio config to create
-	FP_DNS,				// DNS lookup fails
-	FP_TLSIO_MALLOC,	// tlsio instance malloc fails
-						// Create has succeeded here
+	FP_NULL_CONFIG,			// supplying a null tlsio config to create
+	FP_DNS,					// DNS lookup fails
+	FP_TLSIO_MALLOC,		// tlsio instance malloc fails
+							// Create has succeeded here
 
-						// tlsio_openssl_open
-	FP_SOCKET_OPEN,		// creation of the TLS socket fails
-	FP_SSL_CTX_new,		// SSL_CTX_new fails
-	FP_SSL_new,			// SSL_new fails
-	FP_SSL_set_fd,		// SSL_set_fd fails
-	FP_SSL_connect_0,	// SSL_connect fails with SSL failure sequence 0
+							// tlsio_openssl_open
+	FP_SOCKET_OPEN,			// creation of the TLS socket fails
+	FP_SSL_CTX_new,			// SSL_CTX_new fails
+	FP_SSL_new,				// SSL_new fails
+	FP_SSL_set_fd,			// SSL_set_fd fails
+	FP_SSL_connect_0,		// SSL_connect fails with failure sequence 0
+	FP_SSL_connect_1,		// SSL_connect fails with failure sequence 1
+	FP_SSL_connect_OK_0,	// SSL_connect fails with success sequence 0
+	FP_SSL_connect_OK_1,	// SSL_connect fails with success sequence 1
 
+	// NOTE!!!! Update fail_point_names below when adding to this enum
 
 	FP_FINAL_OK
 };
@@ -49,6 +53,9 @@ static X fail_point_names[] =
 	FAIL_POINT_NAME(FP_SSL_new)
 	FAIL_POINT_NAME(FP_SSL_set_fd)
 	FAIL_POINT_NAME(FP_SSL_connect_0)
+	FAIL_POINT_NAME(FP_SSL_connect_1)
+	FAIL_POINT_NAME(FP_SSL_connect_OK_0)
+	FAIL_POINT_NAME(FP_SSL_connect_OK_1)
 
 	FAIL_POINT_NAME(FP_FINAL_OK)
 };

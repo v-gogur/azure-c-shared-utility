@@ -277,11 +277,25 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
 			{
 				switch (fail_point)
 				{
-					//case FP_SSL_connect_0:
-					//	break;
-				default:
+				case FP_SSL_connect_0:
 					SSL_ERROR_PREPARE_SEQUENCE(SSL_CONNECT_ERROR_SEQUENCE_0);
 					NO_FAIL_POINT(FP_SSL_connect_0, SSL_connect(SSL_Good_Ptr));
+					break;
+				case FP_SSL_connect_1:
+					SSL_ERROR_PREPARE_SEQUENCE(SSL_CONNECT_ERROR_SEQUENCE_1);
+					NO_FAIL_POINT(FP_SSL_connect_1, SSL_connect(SSL_Good_Ptr));
+					NO_FAIL_POINT(FP_SSL_connect_1, SSL_connect(SSL_Good_Ptr));
+					NO_FAIL_POINT(FP_SSL_connect_1, SSL_connect(SSL_Good_Ptr));
+					break;
+				case FP_SSL_connect_OK_0:
+					SSL_ERROR_PREPARE_SEQUENCE(SSL_CONNECT_OK_ERROR_SEQUENCE_0);
+					NO_FAIL_POINT(FP_SSL_connect_OK_0, SSL_connect(SSL_Good_Ptr));
+					break;
+				default:
+					SSL_ERROR_PREPARE_SEQUENCE(SSL_CONNECT_OK_ERROR_SEQUENCE_1);
+					NO_FAIL_POINT(FP_SSL_connect_OK_1, SSL_connect(SSL_Good_Ptr));
+					NO_FAIL_POINT(FP_SSL_connect_OK_1, SSL_connect(SSL_Good_Ptr));
+					NO_FAIL_POINT(FP_SSL_connect_OK_1, SSL_connect(SSL_Good_Ptr));
 					break;
 				}
 			}
@@ -331,7 +345,14 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
 					IO_BYTES_RECEIVED_CONTEXT, on_io_error, IO_ERROR_CONTEXT);
 				// TODO: Add asserts for open_result plus callbacks
 				SSL_ERROR_ASSERT_RECENT_SEQUENCE();	// special checking for SSL_connect
-				open_result;
+				if (fail_point >= FP_SSL_connect_OK_0)
+				{
+					ASSERT_ARE_EQUAL_WITH_MSG(int, 0, open_result, "Unexpected concrete_io_open failure");
+				}
+				else
+				{
+					ASSERT_ARE_NOT_EQUAL_WITH_MSG(int, 0, open_result, "Unexpected concrete_io_open success");
+				}
 
 				//ASSERT_IS_FALSE(on_io_error_called);
 				//ASSERT_IS_TRUE(on_io_open_complete_called);
