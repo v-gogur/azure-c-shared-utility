@@ -259,7 +259,7 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
 	TEST_FUNCTION(tlsio_openssl_create_and_open)
 	{
 
-		for (int fail_point = 0; fail_point <= TP_FINAL_OK; fail_point++)
+		for (int test_point = 0; test_point <= TP_FINAL_OK; test_point++)
 		{
 			/////////////////////////////////////////////////////////////////////////////
 			///arrange
@@ -284,9 +284,9 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
 			TEST_POINT(TP_SSL_set_fd, SSL_set_fd(SSL_Good_Ptr, SSL_Good_Socket));
 
 			// SSL_connect can succeed and fail in several different sequences
-			if (fail_point >= TP_SSL_connect_0)
+			if (test_point >= TP_SSL_connect_0)
 			{
-				switch (fail_point)
+				switch (test_point)
 				{
 				case TP_SSL_connect_0:
 					SSL_ERROR_PREPARE_SEQUENCE(SSL_CONNECT_ERROR_SEQUENCE_0);
@@ -327,7 +327,7 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
 
 			umock_c_negative_tests_reset();
 
-			uint16_t fail_index = test_points[fail_point];
+			uint16_t fail_index = test_points[test_point];
 			if (fail_index != 0xffff)
 			{
 				umock_c_negative_tests_fail_call(fail_index);
@@ -335,7 +335,7 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
 
 			// Show the fail point description in the output for the sake of 
 			// human readability
-			test_point_label_output(fail_point);
+			test_point_label_output(test_point);
 
 			//////////////////////////////////////////////////////////////////////////////////////////////////////
 			///act
@@ -343,10 +343,10 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
 
 			const IO_INTERFACE_DESCRIPTION* tlsio_id = tlsio_get_interface_description();
 
-			TLSIO_CONFIG* cfg = fail_point == TP_NULL_CONFIG ? NULL : &tlsio_config;
+			TLSIO_CONFIG* cfg = test_point == TP_NULL_CONFIG ? NULL : &tlsio_config;
 			CONCRETE_IO_HANDLE tlsio = tlsio_id->concrete_io_create(cfg);
 
-			if (fail_point <= TP_TLSIO_MALLOC)
+			if (test_point <= TP_TLSIO_MALLOC)
 			{
 				ASSERT_IS_NULL(tlsio);
 			}
@@ -357,7 +357,7 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
 					IO_BYTES_RECEIVED_CONTEXT, on_io_error, IO_ERROR_CONTEXT);
 				// TODO: Add asserts for open_result plus callbacks
 				SSL_ERROR_ASSERT_LAST_ERROR_SEQUENCE();	// special checking for SSL_connect
-				if (fail_point >= TP_SSL_connect_OK_0)
+				if (test_point >= TP_SSL_connect_OK_0)
 				{
 					// Here the open succeeded
 					ASSERT_ARE_EQUAL_WITH_MSG(int, 0, open_result, "Unexpected concrete_io_open failure");

@@ -86,7 +86,7 @@ static void InitTestPoints()
 // TEST_POINT means that the call is expected at the provided fail point and beyond,
 // and the framework will fail the call the first time it hits it.
 // The messy macro on line 2 of TEST_POINT is the expansion of STRICT_EXPECTED_CALL
-#define TEST_POINT(fp, call) if(fail_point >= fp) {  \
+#define TEST_POINT(fp, call) if(test_point >= fp) {  \
 	C2(get_auto_ignore_args_function_, call)(C2(umock_c_strict_expected_,call), #call);			\
 	test_points[fp] = expected_call_count;	\
 	expected_call_count++;		\
@@ -95,7 +95,7 @@ static void InitTestPoints()
 // NO_FAIL_TEST_POINT means that this call is expected at the provided test point and beyond,
 // and the framework will not fail the call.
 // The messy macro on line 2 of NO_FAIL_TEST_POINT is the expansion of STRICT_EXPECTED_CALL
-#define NO_FAIL_TEST_POINT(fp, call) if(fail_point >= fp) {  \
+#define NO_FAIL_TEST_POINT(fp, call) if(test_point >= fp) {  \
 	C2(get_auto_ignore_args_function_, call)(C2(umock_c_strict_expected_,call), #call);			\
 	expected_call_count++;		\
 }
@@ -103,7 +103,7 @@ static void InitTestPoints()
 // IF_PAST_TEST_POINT means that this call is expected everywhere past the provided
 // test point, and the framework will not fail the call.
 // The messy macro on line 2 of IF_PAST_TEST_POINT is the expansion of STRICT_EXPECTED_CALL
-#define IF_PAST_TEST_POINT(fp, call) if(fail_point > fp) {  \
+#define IF_PAST_TEST_POINT(fp, call) if(test_point > fp) {  \
 	C2(get_auto_ignore_args_function_, call)(C2(umock_c_strict_expected_,call), #call);			\
 	expected_call_count++;		\
 }
