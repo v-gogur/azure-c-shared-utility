@@ -16,20 +16,20 @@ enum
 {
 							// tlsio_openssl_create
 
-	TP_NULL_CONFIG,			// supplying a null tlsio config to create
-	TP_DNS,					// DNS lookup fails
-	TP_TLSIO_MALLOC,		// tlsio instance malloc fails
+	TP_NULL_CONFIG_FAIL,	// supplying a null tlsio config to create
+	TP_DNS_FAIL,			// DNS lookup fails
+	TP_TLSIO_MALLOC_FAIL,	// tlsio instance malloc fails
 							// Create has succeeded here
 
 							// tlsio_openssl_open
-	TP_SOCKET_OPEN,			// creation of the TLS socket fails
-	TP_SSL_CTX_new,			// SSL_CTX_new fails
-	TP_SSL_new,				// SSL_new fails
-	TP_SSL_set_fd,			// SSL_set_fd fails
-	TP_SSL_connect_0,		// SSL_connect fails with failure sequence 0
-	TP_SSL_connect_1,		// SSL_connect fails with failure sequence 1
-	TP_SSL_connect_OK_0,	// SSL_connect fails with success sequence 0
-	TP_SSL_connect_OK_1,	// SSL_connect fails with success sequence 1
+	TP_SOCKET_OPEN_FAIL,	// creation of the TLS socket fails
+	TP_SSL_CTX_new_FAIL,	// SSL_CTX_new fails
+	TP_SSL_new_FAIL,		// SSL_new fails
+	TP_SSL_set_fd_FAIL,		// SSL_set_fd fails
+	TP_SSL_connect_0_FAIL,	// SSL_connect fails with failure sequence 0
+	TP_SSL_connect_1_FAIL,	// SSL_connect fails with failure sequence 1
+	TP_SSL_connect_0_OK,	// SSL_connect fails with success sequence 0
+	TP_SSL_connect_1_OK,	// SSL_connect fails with success sequence 1
 
 	// NOTE!!!! Update test_point_names below when adding to this enum
 
@@ -45,17 +45,17 @@ typedef struct X {
 
 static X test_point_names[] =
 {
-	TEST_POINT_NAME(TP_NULL_CONFIG)
-	TEST_POINT_NAME(TP_DNS)
-	TEST_POINT_NAME(TP_TLSIO_MALLOC)
-	TEST_POINT_NAME(TP_SOCKET_OPEN)
-	TEST_POINT_NAME(TP_SSL_CTX_new)
-	TEST_POINT_NAME(TP_SSL_new)
-	TEST_POINT_NAME(TP_SSL_set_fd)
-	TEST_POINT_NAME(TP_SSL_connect_0)
-	TEST_POINT_NAME(TP_SSL_connect_1)
-	TEST_POINT_NAME(TP_SSL_connect_OK_0)
-	TEST_POINT_NAME(TP_SSL_connect_OK_1)
+	TEST_POINT_NAME(TP_NULL_CONFIG_FAIL)
+	TEST_POINT_NAME(TP_DNS_FAIL)
+	TEST_POINT_NAME(TP_TLSIO_MALLOC_FAIL)
+	TEST_POINT_NAME(TP_SOCKET_OPEN_FAIL)
+	TEST_POINT_NAME(TP_SSL_CTX_new_FAIL)
+	TEST_POINT_NAME(TP_SSL_new_FAIL)
+	TEST_POINT_NAME(TP_SSL_set_fd_FAIL)
+	TEST_POINT_NAME(TP_SSL_connect_0_FAIL)
+	TEST_POINT_NAME(TP_SSL_connect_1_FAIL)
+	TEST_POINT_NAME(TP_SSL_connect_0_OK)
+	TEST_POINT_NAME(TP_SSL_connect_1_OK)
 
 	TEST_POINT_NAME(TP_FINAL_OK)
 };

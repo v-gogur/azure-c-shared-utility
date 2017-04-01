@@ -28,12 +28,17 @@
 #define TLSIO_SSL_OPEN_RETRIES 10
 #endif
 
-
+// This adapter keeps itself in either TLSIO_STATE_OPEN, which
+// or TLSIO_STATE_NOT_OPEN. There are no internally inconsistent
+// states that would need to be labeled "error". Failures that
+// tell us that the SSL connection can no longer be trusted
+// cause the adapter to close the connection and release all
+// resources, at which point it is ready for Open to be called
+// again.
 typedef enum TLSIO_STATE_TAG
 {
 	TLSIO_STATE_NOT_OPEN,
 	TLSIO_STATE_OPEN,
-	TLSIO_STATE_ERROR
 } TLSIO_STATE;
 
 typedef struct TLS_IO_INSTANCE_TAG
@@ -64,17 +69,15 @@ static const char* null_tlsio_message = "NULL tlsio";
 	else	
 
 
-static void set_error_state_with_callback(TLS_IO_INSTANCE* tls_io_instance)
+static void internal_close(TLS_IO_INSTANCE* tls_io_instance)
 {
-	tls_io_instance->tlsio_state = TLSIO_STATE_ERROR;
-	if (tls_io_instance->on_io_error != NULL)
+	// The TLSIO_STATE_OPEN is semantically identical to the state where
+	// SSL_shutdown needs to be called.
+	if (tls_io_instance->tlsio_state == TLSIO_STATE_OPEN)
 	{
-		tls_io_instance->on_io_error(tls_io_instance->on_io_error_context);
+		(void)SSL_shutdown(tls_io_instance->ssl);
 	}
-}
 
-static void destroy_openssl_connection_members(TLS_IO_INSTANCE* tls_io_instance)
-{
 	if (tls_io_instance->ssl != NULL)
 	{
 		SSL_free(tls_io_instance->ssl);
@@ -89,6 +92,17 @@ static void destroy_openssl_connection_members(TLS_IO_INSTANCE* tls_io_instance)
 	{
 		SSL_Socket_Close(tls_io_instance->sock);
 		tls_io_instance->sock = -1;
+	}
+
+	tls_io_instance->tlsio_state = TLSIO_STATE_NOT_OPEN;
+}
+
+static void Internal_close_with_stored_error_callback(TLS_IO_INSTANCE* tls_io_instance)
+{
+	internal_close(tls_io_instance);
+	if (tls_io_instance->on_io_error != NULL)
+	{
+		tls_io_instance->on_io_error(tls_io_instance->on_io_error_context);
 	}
 }
 
@@ -193,7 +207,7 @@ static int create_and_connect_ssl(TLS_IO_INSTANCE* tls_io_instance)
 							{
 								// Connect failed, so delete the connection objects
 								done = true;
-								destroy_openssl_connection_members(tls_io_instance);
+								internal_close(tls_io_instance);
 								LogInfo("Hard error from SSL_connect: %d", hard_error);
 							}
 						}
@@ -272,7 +286,7 @@ void tlsio_openssl_destroy(CONCRETE_IO_HANDLE tls_io)
 {
 	ASSIGN_AND_CHECK_TLSIO_INSTANCE
 	{
-		destroy_openssl_connection_members(tls_io_instance);
+		internal_close(tls_io_instance);
 
 		if (tls_io_instance->certificate != NULL)
 		{
@@ -304,6 +318,12 @@ int tlsio_openssl_open(CONCRETE_IO_HANDLE tls_io,
 	int result = -1;
 	ASSIGN_AND_CHECK_TLSIO_INSTANCE
 	{
+		tls_io_instance->on_bytes_received = on_bytes_received;
+		tls_io_instance->on_bytes_received_context = on_bytes_received_context;
+
+		tls_io_instance->on_io_error = on_io_error;
+		tls_io_instance->on_io_error_context = on_io_error_context;
+
 		if (on_bytes_received == NULL)
 		{
 			LogError("Required non-NULL parameter on_bytes_received is NULL");
@@ -316,37 +336,29 @@ int tlsio_openssl_open(CONCRETE_IO_HANDLE tls_io,
 			{
 				result = __FAILURE__;
 				LogError("Invalid tlsio_state. Expected state is TLSIO_STATE_NOT_OPEN.");
-
-				// Set up the error values so set_error_state_with_callback can use them
-				tls_io_instance->on_io_error = on_io_error;
-				tls_io_instance->on_io_error_context = on_io_error_context;
-
-				set_error_state_with_callback(tls_io_instance);
 			}
 			else
 			{
-				tls_io_instance->on_bytes_received = on_bytes_received;
-				tls_io_instance->on_bytes_received_context = on_bytes_received_context;
-
-				tls_io_instance->on_io_error = on_io_error;
-				tls_io_instance->on_io_error_context = on_io_error_context;
-
 				if (create_and_connect_ssl(tls_io_instance) != 0)
 				{
-					set_error_state_with_callback(tls_io_instance);
 					result = __FAILURE__;
 				}
 				else
 				{
 					tls_io_instance->tlsio_state = TLSIO_STATE_OPEN;
-					if (on_io_open_complete)
-					{
-						on_io_open_complete(on_io_open_complete_context, IO_OPEN_OK);
-					}
 					result = 0;
 				}
 			}
 		}
+	}
+	if (result != 0)
+	{
+		Internal_close_with_stored_error_callback(tls_io_instance);
+	}
+
+	if (on_io_open_complete)
+	{
+		on_io_open_complete(on_io_open_complete_context, result == 0 ? IO_OPEN_OK : IO_OPEN_ERROR);
 	}
 	return result;
 }
@@ -355,32 +367,27 @@ int tlsio_openssl_open(CONCRETE_IO_HANDLE tls_io,
 /* Codes_SRS_TLSIO_SSL_ESP8266_99_013: [ The tlsio_openssl_close succeed.]*/
 int tlsio_openssl_close(CONCRETE_IO_HANDLE tls_io, ON_IO_CLOSE_COMPLETE on_io_close_complete, void* callback_context)
 {
-	int result= 0;
+	int result = 0;
 
 	ASSIGN_AND_CHECK_TLSIO_INSTANCE
 	{
 		if (tls_io_instance->tlsio_state == TLSIO_STATE_NOT_OPEN)
 		{
 			result = __FAILURE__;
-			tls_io_instance->tlsio_state = TLSIO_STATE_ERROR;
-			LogError("Invalid tlsio_state. Expected state is TLSIO_STATE_OPEN or TLSIO_STATE_ERROR.");
+			LogError("tlsio_openssl_close has been called with no prior successful open.");
 		}
-		else
-		{
-			(void)SSL_shutdown(tls_io_instance->ssl);
-			destroy_openssl_connection_members(tls_io_instance);
-			tls_io_instance->tlsio_state = TLSIO_STATE_NOT_OPEN;
-			if (on_io_close_complete != NULL)
-			{
-				on_io_close_complete(callback_context);
-			}
-		}
+		internal_close(tls_io_instance);
+	}
+	if (on_io_close_complete != NULL)
+	{
+		on_io_close_complete(callback_context);
 	}
 	return result;
 }
 
 int tlsio_openssl_send(CONCRETE_IO_HANDLE tls_io, const void* buffer, size_t size, ON_SEND_COMPLETE on_send_complete, void* callback_context)
 {
+	IO_SEND_RESULT sr = IO_SEND_ERROR;
 	int result = __FAILURE__;
 	size_t bytes_to_send = size;
 
@@ -432,7 +439,6 @@ int tlsio_openssl_send(CONCRETE_IO_HANDLE tls_io, const void* buffer, size_t siz
 					ThreadAPI_Sleep(SEND_RETRY_DELAY_MILLISECONDS);
 				}
 
-				IO_SEND_RESULT sr = IO_SEND_ERROR;
 				if (total_written == bytes_to_send)
 				{
 					sr = IO_SEND_OK;
@@ -440,15 +446,15 @@ int tlsio_openssl_send(CONCRETE_IO_HANDLE tls_io, const void* buffer, size_t siz
 				}
 				else
 				{
-					set_error_state_with_callback(tls_io_instance);
-				}
-
-				if (on_send_complete != NULL)
-				{
-					on_send_complete(callback_context, sr);
+					Internal_close_with_stored_error_callback(tls_io_instance);
 				}
 			}
 		}
+	}
+
+	if (on_send_complete != NULL)
+	{
+		on_send_complete(callback_context, sr);
 	}
 	return result;
 }
@@ -474,8 +480,7 @@ void tlsio_openssl_dowork(CONCRETE_IO_HANDLE tls_io)
 		}
 		else if (tls_io_instance->tlsio_state == TLSIO_STATE_NOT_OPEN)
 		{
-			LogError("Invalid tlsio_state for dowork. Expected state is TLSIO_STATE_OPEN.");
-			tls_io_instance->tlsio_state = TLSIO_STATE_ERROR;
+			LogError("tlsio_openssl_dowork has been called with no prior successful open call.");
 			if (tls_io_instance->on_io_error)
 			{
 				tls_io_instance->on_io_error(tls_io_instance->on_io_error_context);
