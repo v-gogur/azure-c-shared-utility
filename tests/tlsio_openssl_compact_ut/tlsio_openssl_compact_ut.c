@@ -50,15 +50,19 @@ void my_gballoc_free(void* ptr)
 #include "azure_c_shared_utility/tlsio.h"
 #include "azure_c_shared_utility/xio.h"
 
+// Keep track of whether callbacks were performed as expected
 static bool on_io_open_complete_call_count;
 static bool on_io_open_complete_context_ok;
 static IO_OPEN_RESULT on_io_open_complete_result;
 static int on_io_error_call_count;
 static bool on_io_error_context_ok;
+static int on_io_close_call_count;
+static bool on_io_close_context_ok;
 
 #define IO_OPEN_COMPLETE_CONTEXT (void*)55
 #define IO_ERROR_CONTEXT (void*)66
 #define IO_BYTES_RECEIVED_CONTEXT (void*)77
+#define IO_CLOSE_COMPLETE_CONTEXT (void*)66
 
 static void reset_callback_context_records()
 {
@@ -67,6 +71,7 @@ static void reset_callback_context_records()
 	on_io_open_complete_result = -1;
 	on_io_error_call_count = 0;
 	on_io_error_context_ok = false;
+	on_io_close_call_count = 0;
 }
 
 static void on_io_open_complete(void* context, IO_OPEN_RESULT open_result)
@@ -74,6 +79,12 @@ static void on_io_open_complete(void* context, IO_OPEN_RESULT open_result)
 	on_io_open_complete_call_count++;
 	on_io_open_complete_result = open_result;
 	on_io_open_complete_context_ok = context == IO_OPEN_COMPLETE_CONTEXT;
+}
+
+static void on_io_close_complete(void* context)
+{
+	on_io_close_call_count++;
+	on_io_close_context_ok = context == IO_CLOSE_COMPLETE_CONTEXT;
 }
 
 static void on_bytes_received(void* context, const unsigned char* buffer, size_t size)
@@ -109,6 +120,19 @@ static void ASSERT_IO_OPEN_CALLBACK(bool called, int open_result)
 	else
 	{
 		ASSERT_ARE_EQUAL_WITH_MSG(int, 0, on_io_open_complete_call_count, "unexpected on_io_open_complete_callback");
+	}
+}
+
+static void ASSERT_IO_CLOSE_CALLBACK(bool called)
+{
+	if (called)
+	{
+		ASSERT_ARE_EQUAL_WITH_MSG(int, 1, on_io_close_call_count, "on_io_close_complete_callback count mismatch");
+		ASSERT_IS_TRUE_WITH_MSG(on_io_close_context_ok, "io_close_complete_context not passed");
+	}
+	else
+	{
+		ASSERT_ARE_EQUAL_WITH_MSG(int, 0, on_io_close_call_count, "unexpected on_io_close_complete_callback");
 	}
 }
 
@@ -270,7 +294,7 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
 
 
 	/* Tests_SRS_TEMPLATE_21_001: [ The target_create shall call callee_open to do stuff and allocate the memory. ]*/
-	TEST_FUNCTION(tlsio_openssl_create_and_open)
+	TEST_FUNCTION(tlsio_openssl_main_sequence)
 	{
 
 		for (int test_point = 0; test_point <= TP_FINAL_OK; test_point++)
@@ -369,8 +393,9 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
 
 			if (tlsio)
 			{
+				ON_IO_OPEN_COMPLETE open_callback = test_point != TP_Open_no_callback ? on_io_open_complete : NULL;
 				ASSERT_IO_OPEN_CALLBACK(false, 0);
-				int open_result = tlsio_id->concrete_io_open(tlsio, on_io_open_complete, IO_OPEN_COMPLETE_CONTEXT, on_bytes_received,
+				int open_result = tlsio_id->concrete_io_open(tlsio, open_callback, IO_OPEN_COMPLETE_CONTEXT, on_bytes_received,
 					IO_BYTES_RECEIVED_CONTEXT, on_io_error, IO_ERROR_CONTEXT);
 				// TODO: Add asserts for open_result plus callbacks
 				SSL_ERROR_ASSERT_LAST_ERROR_SEQUENCE();	// special checking for SSL_connect
@@ -379,7 +404,7 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
 					// Here the open succeeded
 					ASSERT_ARE_EQUAL_WITH_MSG(int, 0, open_result, "Unexpected concrete_io_open failure");
 					ASSERT_ERROR_CALLBACK_COUNT(0);
-					ASSERT_IO_OPEN_CALLBACK(true, IO_OPEN_OK);
+					ASSERT_IO_OPEN_CALLBACK(test_point != TP_Open_no_callback, IO_OPEN_OK);
 				}
 				else
 				{
@@ -391,6 +416,9 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
 
 				// Close here
 				// TODO:  close
+				ON_IO_CLOSE_COMPLETE close_callback = test_point != TP_Close_no_callback ? on_io_close_complete : NULL;
+				tlsio_id->concrete_io_close(tlsio, close_callback, IO_CLOSE_COMPLETE_CONTEXT);
+				ASSERT_IO_CLOSE_CALLBACK(test_point != TP_Close_no_callback);
 
 				tlsio_id->concrete_io_destroy(tlsio);
 			}

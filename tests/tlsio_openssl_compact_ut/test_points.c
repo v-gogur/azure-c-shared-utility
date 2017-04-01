@@ -30,6 +30,10 @@ enum
 	TP_SSL_connect_1_FAIL,	// SSL_connect fails with failure sequence 1
 	TP_SSL_connect_0_OK,	// SSL_connect fails with success sequence 0
 	TP_SSL_connect_1_OK,	// SSL_connect fails with success sequence 1
+	TP_Open_no_callback,	// Open succeeded but no on_open callback privided
+
+
+	TP_Close_no_callback,	// Calling close with no close callback function
 
 	// NOTE!!!! Update test_point_names below when adding to this enum
 
@@ -56,6 +60,10 @@ static X test_point_names[] =
 	TEST_POINT_NAME(TP_SSL_connect_1_FAIL)
 	TEST_POINT_NAME(TP_SSL_connect_0_OK)
 	TEST_POINT_NAME(TP_SSL_connect_1_OK)
+	TEST_POINT_NAME(TP_Open_no_callback)
+
+
+	TEST_POINT_NAME(TP_Close_no_callback)
 
 	TEST_POINT_NAME(TP_FINAL_OK)
 };
