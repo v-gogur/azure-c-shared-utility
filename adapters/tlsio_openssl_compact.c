@@ -350,10 +350,10 @@ int tlsio_openssl_open(CONCRETE_IO_HANDLE tls_io,
 				}
 			}
 		}
-	}
-	if (result != 0)
-	{
-		Internal_close_with_stored_error_callback(tls_io_instance);
+		if (result != 0)
+		{
+			Internal_close_with_stored_error_callback(tls_io_instance);
+		}
 	}
 
 	if (on_io_open_complete)

@@ -103,8 +103,9 @@ static void on_io_error(void* context)
 	on_io_error_context_ok = context == IO_ERROR_CONTEXT;
 }
 
-static void ASSERT_ERROR_CALLBACK_COUNT(int count)
+static void ASSERT_ERROR_CALLBACK_COUNT(bool called)
 {
+	int count = called ? 1 : 0;
 	ASSERT_ARE_EQUAL_WITH_MSG(int, count, on_io_error_call_count, "io_error_callback count mismatch");
 	if (count > 0)
 	{
@@ -356,10 +357,38 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
 				}
 			}
 
+			//// SSL_connect can succeed and fail in several different sequences
+			//if (test_point >= TP_SSL_connect_0_FAIL)
+			//{
+			//	switch (test_point)
+			//	{
+			//	case TP_SSL_connect_0_FAIL:
+			//		SSL_CONNECT_ERROR_PREPARE_SEQUENCE(SSL_CONNECT_FAIL_ERROR_SEQUENCE_0);
+			//		NO_FAIL_TEST_POINT(TP_SSL_connect_0_FAIL, SSL_connect(SSL_Good_Ptr));
+			//		break;
+			//	case TP_SSL_connect_1_FAIL:
+			//		SSL_CONNECT_ERROR_PREPARE_SEQUENCE(SSL_CONNECT_FAIL_ERROR_SEQUENCE_1);
+			//		NO_FAIL_TEST_POINT(TP_SSL_connect_1_FAIL, SSL_connect(SSL_Good_Ptr));
+			//		NO_FAIL_TEST_POINT(TP_SSL_connect_1_FAIL, SSL_connect(SSL_Good_Ptr));
+			//		NO_FAIL_TEST_POINT(TP_SSL_connect_1_FAIL, SSL_connect(SSL_Good_Ptr));
+			//		break;
+			//	case TP_SSL_connect_0_OK:
+			//		SSL_CONNECT_ERROR_PREPARE_SEQUENCE(SSL_CONNECT_OK_ERROR_SEQUENCE_0);
+			//		NO_FAIL_TEST_POINT(TP_SSL_connect_0_OK, SSL_connect(SSL_Good_Ptr));
+			//		break;
+			//	default:
+			//		SSL_CONNECT_ERROR_PREPARE_SEQUENCE(SSL_CONNECT_OK_ERROR_SEQUENCE_1);
+			//		NO_FAIL_TEST_POINT(TP_SSL_connect_1_OK, SSL_connect(SSL_Good_Ptr));
+			//		NO_FAIL_TEST_POINT(TP_SSL_connect_1_OK, SSL_connect(SSL_Good_Ptr));
+			//		NO_FAIL_TEST_POINT(TP_SSL_connect_1_OK, SSL_connect(SSL_Good_Ptr));
+			//		break;
+			//	}
+			//}
 
 
 
-			// Destroy SSL Connection Members
+
+			// Close SSL Connection Members
 			IF_PAST_TEST_POINT(TP_SSL_connect_1_FAIL, SSL_shutdown(SSL_Good_Ptr));
 			IF_PAST_TEST_POINT(TP_SSL_new_FAIL, SSL_free(SSL_Good_Ptr));
 			IF_PAST_TEST_POINT(TP_SSL_CTX_new_FAIL, SSL_CTX_free(SSL_Good_Context_Ptr));
@@ -409,9 +438,10 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
 				OPTIONHANDLER_HANDLE retrieve_option_result = tlsio_id->concrete_io_retrieveoptions(tlsio);
 				ASSERT_IS_NULL_WITH_MSG(retrieve_option_result, "Unexpected result from concrete_io_retrieveoptions");
 
+				CONCRETE_IO_HANDLE tlsio_for_open_call = test_point != TP_NULL_OPEN ? tlsio : NULL;
 				ON_IO_OPEN_COMPLETE open_callback = test_point != TP_Open_no_callback ? on_io_open_complete : NULL;
 				ASSERT_IO_OPEN_CALLBACK(false, 0);
-				int open_result = tlsio_id->concrete_io_open(tlsio, open_callback, IO_OPEN_COMPLETE_CONTEXT, on_bytes_received,
+				int open_result = tlsio_id->concrete_io_open(tlsio_for_open_call, open_callback, IO_OPEN_COMPLETE_CONTEXT, on_bytes_received,
 					IO_BYTES_RECEIVED_CONTEXT, on_io_error, IO_ERROR_CONTEXT);
 				// TODO: Add asserts for open_result plus callbacks
 				SSL_CONNECT_ERROR_ASSERT_LAST_ERROR_SEQUENCE();	// special checking for SSL_connect
@@ -426,14 +456,18 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
 				{
 					// Here the open failed
 					ASSERT_ARE_NOT_EQUAL_WITH_MSG(int, 0, open_result, "Unexpected concrete_io_open success");
-					ASSERT_ERROR_CALLBACK_COUNT(1);
+					bool expected_open_callbacks = test_point != TP_NULL_OPEN ? true : false;
+					ASSERT_ERROR_CALLBACK_COUNT(expected_open_callbacks);
 					ASSERT_IO_OPEN_CALLBACK(true, IO_OPEN_ERROR);
 				}
 
 				// Close here
 				ON_IO_CLOSE_COMPLETE close_callback = test_point != TP_Close_no_callback ? on_io_close_complete : NULL;
-				tlsio_id->concrete_io_close(tlsio, close_callback, IO_CLOSE_COMPLETE_CONTEXT);
-				ASSERT_IO_CLOSE_CALLBACK(test_point != TP_Close_no_callback);
+				if (open_result == 0)
+				{
+					tlsio_id->concrete_io_close(tlsio, close_callback, IO_CLOSE_COMPLETE_CONTEXT);
+					ASSERT_IO_CLOSE_CALLBACK(test_point != TP_Close_no_callback);
+				}
 
 				// Finally destroy
 				tlsio_id->concrete_io_destroy(tlsio);

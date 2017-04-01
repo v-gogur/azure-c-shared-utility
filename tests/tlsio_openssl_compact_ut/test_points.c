@@ -22,6 +22,7 @@ enum
 							// Create has succeeded here
 
 							// tlsio_openssl_open
+	TP_NULL_OPEN,			// tlsio_openssl_open with null tlsio
 	TP_SOCKET_OPEN_FAIL,	// creation of the TLS socket fails
 	TP_SSL_CTX_new_FAIL,	// SSL_CTX_new fails
 	TP_SSL_new_FAIL,		// SSL_new fails
@@ -52,6 +53,7 @@ static X test_point_names[] =
 	TEST_POINT_NAME(TP_NULL_CONFIG_FAIL)
 	TEST_POINT_NAME(TP_DNS_FAIL)
 	TEST_POINT_NAME(TP_TLSIO_MALLOC_FAIL)
+	TEST_POINT_NAME(TP_NULL_OPEN)
 	TEST_POINT_NAME(TP_SOCKET_OPEN_FAIL)
 	TEST_POINT_NAME(TP_SSL_CTX_new_FAIL)
 	TEST_POINT_NAME(TP_SSL_new_FAIL)
@@ -61,6 +63,9 @@ static X test_point_names[] =
 	TEST_POINT_NAME(TP_SSL_connect_0_OK)
 	TEST_POINT_NAME(TP_SSL_connect_1_OK)
 	TEST_POINT_NAME(TP_Open_no_callback)
+	//TEST_POINT_NAME(TP_SEND_NULL_BUFFER_FAIL)
+	//TEST_POINT_NAME(TP_Write_FAIL)
+	//TEST_POINT_NAME(TP_Write_OK)
 
 
 	TEST_POINT_NAME(TP_Close_no_callback)
