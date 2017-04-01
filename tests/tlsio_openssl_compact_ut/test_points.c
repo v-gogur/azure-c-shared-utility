@@ -14,68 +14,76 @@
 // to either succeed or fail at that test point
 enum
 {
-							// tlsio_openssl_create
+                                // tlsio_openssl_create
+    TP_NULL_CONFIG_FAIL,	    // supplying a null tlsio config to create
+    TP_DNS_FAIL,			    // DNS lookup fails
+    TP_TLSIO_MALLOC_FAIL,	    // tlsio instance malloc fails
+                                // Create has succeeded here
 
-	TP_NULL_CONFIG_FAIL,	// supplying a null tlsio config to create
-	TP_DNS_FAIL,			// DNS lookup fails
-	TP_TLSIO_MALLOC_FAIL,	// tlsio instance malloc fails
-							// Create has succeeded here
+                                // tlsio_openssl_open
+    TP_OPEN_NULL_TLSIO_FAIL,	// tlsio_openssl_open with null tlsio
+    TP_SOCKET_OPEN_FAIL,	    // creation of the TLS socket fails
+    TP_SSL_CTX_new_FAIL,	    // SSL_CTX_new fails
+    TP_SSL_new_FAIL,		    // SSL_new fails
+    TP_SSL_set_fd_FAIL,		    // SSL_set_fd fails
+    TP_SSL_connect_0_FAIL,	    // SSL_connect fails with failure sequence 0
+    TP_SSL_connect_1_FAIL,	    // SSL_connect fails with failure sequence 1
+    TP_SSL_connect_0_OK,	    // SSL_connect fails with success sequence 0
+    TP_SSL_connect_1_OK,	    // SSL_connect fails with success sequence 1
+    TP_Open_no_callback_OK,	    // Open succeeded but no on_open callback privided
+                                // Open has succeeded here
 
-							// tlsio_openssl_open
-	TP_NULL_OPEN,			// tlsio_openssl_open with null tlsio
-	TP_SOCKET_OPEN_FAIL,	// creation of the TLS socket fails
-	TP_SSL_CTX_new_FAIL,	// SSL_CTX_new fails
-	TP_SSL_new_FAIL,		// SSL_new fails
-	TP_SSL_set_fd_FAIL,		// SSL_set_fd fails
-	TP_SSL_connect_0_FAIL,	// SSL_connect fails with failure sequence 0
-	TP_SSL_connect_1_FAIL,	// SSL_connect fails with failure sequence 1
-	TP_SSL_connect_0_OK,	// SSL_connect fails with success sequence 0
-	TP_SSL_connect_1_OK,	// SSL_connect fails with success sequence 1
-	TP_Open_no_callback,	// Open succeeded but no on_open callback privided
+                                // tlsio_openssl_send
+    TP_SEND_NULL_BUFFER_FAIL,	// Send with no read buffer
+    TP_SEND_NULL_TLSIO_FAIL,    // Send with null tlsio
+    TP_SSL_write_FAIL,          // SSl_write fails
+    TP_SSL_write_OK,            // SSl_write fails
+                                // Send has succeeded here
 
 
-	TP_Close_no_callback,	// Calling close with no close callback function
+    TP_Close_no_callback,	// Calling close with no close callback function
 
-	// NOTE!!!! Update test_point_names below when adding to this enum
+    // NOTE!!!! Update test_point_names below when adding to this enum
 
-	TP_FINAL_OK
+    TP_FINAL_OK
 };
 
 typedef struct X {
-	int fp;
-	const char* name;
+    int fp;
+    const char* name;
 } X;
 
 #define TEST_POINT_NAME(p) { p, #p },
 
 static X test_point_names[] =
 {
-	TEST_POINT_NAME(TP_NULL_CONFIG_FAIL)
-	TEST_POINT_NAME(TP_DNS_FAIL)
-	TEST_POINT_NAME(TP_TLSIO_MALLOC_FAIL)
-	TEST_POINT_NAME(TP_NULL_OPEN)
-	TEST_POINT_NAME(TP_SOCKET_OPEN_FAIL)
-	TEST_POINT_NAME(TP_SSL_CTX_new_FAIL)
-	TEST_POINT_NAME(TP_SSL_new_FAIL)
-	TEST_POINT_NAME(TP_SSL_set_fd_FAIL)
-	TEST_POINT_NAME(TP_SSL_connect_0_FAIL)
-	TEST_POINT_NAME(TP_SSL_connect_1_FAIL)
-	TEST_POINT_NAME(TP_SSL_connect_0_OK)
-	TEST_POINT_NAME(TP_SSL_connect_1_OK)
-	TEST_POINT_NAME(TP_Open_no_callback)
-	//TEST_POINT_NAME(TP_SEND_NULL_BUFFER_FAIL)
-	//TEST_POINT_NAME(TP_Write_FAIL)
-	//TEST_POINT_NAME(TP_Write_OK)
+    TEST_POINT_NAME(TP_NULL_CONFIG_FAIL)
+    TEST_POINT_NAME(TP_DNS_FAIL)
+    TEST_POINT_NAME(TP_TLSIO_MALLOC_FAIL)
+    TEST_POINT_NAME(TP_OPEN_NULL_TLSIO_FAIL)
+    TEST_POINT_NAME(TP_SOCKET_OPEN_FAIL)
+    TEST_POINT_NAME(TP_SSL_CTX_new_FAIL)
+    TEST_POINT_NAME(TP_SSL_new_FAIL)
+    TEST_POINT_NAME(TP_SSL_set_fd_FAIL)
+    TEST_POINT_NAME(TP_SSL_connect_0_FAIL)
+    TEST_POINT_NAME(TP_SSL_connect_1_FAIL)
+    TEST_POINT_NAME(TP_SSL_connect_0_OK)
+    TEST_POINT_NAME(TP_SSL_connect_1_OK)
+    TEST_POINT_NAME(TP_Open_no_callback_OK)
+    TEST_POINT_NAME(TP_SEND_NULL_BUFFER_FAIL)
+    TEST_POINT_NAME(TP_SEND_NULL_TLSIO_FAIL)
+    TEST_POINT_NAME(TP_SSL_write_FAIL)
+    TEST_POINT_NAME(TP_SSL_write_OK)
 
 
-	TEST_POINT_NAME(TP_Close_no_callback)
+    TEST_POINT_NAME(TP_Close_no_callback)
 
-	TEST_POINT_NAME(TP_FINAL_OK)
+    TEST_POINT_NAME(TP_FINAL_OK)
 };
 
 static void test_point_label_output(int fp)
 {
-	printf("\n\nTest point: %d  %s\n", fp, test_point_names[fp].name);
+    printf("\n\nTest point: %d  %s\n", fp, test_point_names[fp].name);
 }
 
 
@@ -90,8 +98,8 @@ static uint16_t expected_call_count = 0;
 static void InitTestPoints()
 {
 
-	expected_call_count = 0;
-	memset(test_points, 0xff, sizeof(test_points));
+    expected_call_count = 0;
+    memset(test_points, 0xff, sizeof(test_points));
 
 }
 
@@ -100,23 +108,23 @@ static void InitTestPoints()
 // and the framework will fail the call the first time it hits it.
 // The messy macro on line 2 of TEST_POINT is the expansion of STRICT_EXPECTED_CALL
 #define TEST_POINT(fp, call) if(test_point >= fp) {  \
-	C2(get_auto_ignore_args_function_, call)(C2(umock_c_strict_expected_,call), #call);			\
-	test_points[fp] = expected_call_count;	\
-	expected_call_count++;		\
+    C2(get_auto_ignore_args_function_, call)(C2(umock_c_strict_expected_,call), #call);			\
+    test_points[fp] = expected_call_count;	\
+    expected_call_count++;		\
 }
 
 // NO_FAIL_TEST_POINT means that this call is expected at the provided test point and beyond,
 // and the framework will not fail the call.
 // The messy macro on line 2 of NO_FAIL_TEST_POINT is the expansion of STRICT_EXPECTED_CALL
 #define NO_FAIL_TEST_POINT(fp, call) if(test_point >= fp) {  \
-	C2(get_auto_ignore_args_function_, call)(C2(umock_c_strict_expected_,call), #call);			\
-	expected_call_count++;		\
+    C2(get_auto_ignore_args_function_, call)(C2(umock_c_strict_expected_,call), #call);			\
+    expected_call_count++;		\
 }
 
 // IF_PAST_TEST_POINT means that this call is expected everywhere past the provided
 // test point, and the framework will not fail the call.
 // The messy macro on line 2 of IF_PAST_TEST_POINT is the expansion of STRICT_EXPECTED_CALL
 #define IF_PAST_TEST_POINT(fp, call) if(test_point > fp) {  \
-	C2(get_auto_ignore_args_function_, call)(C2(umock_c_strict_expected_,call), #call);			\
-	expected_call_count++;		\
+    C2(get_auto_ignore_args_function_, call)(C2(umock_c_strict_expected_,call), #call);			\
+    expected_call_count++;		\
 }
