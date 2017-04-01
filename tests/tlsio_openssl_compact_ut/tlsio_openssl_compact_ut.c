@@ -50,10 +50,10 @@ void my_gballoc_free(void* ptr)
 #include "azure_c_shared_utility/tlsio.h"
 #include "azure_c_shared_utility/xio.h"
 
-static bool on_io_open_complete_called;
+static bool on_io_open_complete_call_count;
 static bool on_io_open_complete_context_ok;
 static IO_OPEN_RESULT on_io_open_complete_result;
-static bool on_io_error_called;
+static int on_io_error_call_count;
 static bool on_io_error_context_ok;
 
 #define IO_OPEN_COMPLETE_CONTEXT (void*)55
@@ -62,16 +62,16 @@ static bool on_io_error_context_ok;
 
 static void reset_callback_context_records()
 {
-	on_io_open_complete_called = false;
+	on_io_open_complete_call_count = 0;
 	on_io_open_complete_context_ok = false;
 	on_io_open_complete_result = -1;
-	on_io_error_called = false;
+	on_io_error_call_count = 0;
 	on_io_error_context_ok = false;
 }
 
 static void on_io_open_complete(void* context, IO_OPEN_RESULT open_result)
 {
-	on_io_open_complete_called = true;
+	on_io_open_complete_call_count++;
 	on_io_open_complete_result = open_result;
 	on_io_open_complete_context_ok = context == IO_OPEN_COMPLETE_CONTEXT;
 }
@@ -85,8 +85,17 @@ static void on_bytes_received(void* context, const unsigned char* buffer, size_t
 
 static void on_io_error(void* context)
 {
-	on_io_error_called = true;
+	on_io_error_call_count = true;
 	on_io_error_context_ok = context == IO_ERROR_CONTEXT;
+}
+
+static void ASSERT_ERROR_CALLBACK_COUNT(int count)
+{
+	ASSERT_ARE_EQUAL_WITH_MSG(int, count, on_io_error_call_count, "io_error_callback count mismatch");
+	if (count > 0)
+	{
+		ASSERT_IS_TRUE_WITH_MSG(on_io_error_context_ok, "io_error_callback missing context");
+	}
 }
 
 /**
@@ -116,7 +125,7 @@ void ThreadAPI_Sleep(unsigned int milliseconds) { milliseconds; return; }
 
 #include "ssl_errors.c"
 
-#include "fail_points.c"
+#include "test_points.c"
 
  /**
   * You can create some global variables that your test will need in some way.
@@ -250,74 +259,75 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
 	TEST_FUNCTION(tlsio_openssl_create_and_open)
 	{
 
-		for (int fail_point = 0; fail_point <= FP_FINAL_OK; fail_point++)
+		for (int fail_point = 0; fail_point <= TP_FINAL_OK; fail_point++)
 		{
+			/////////////////////////////////////////////////////////////////////////////
 			///arrange
+			/////////////////////////////////////////////////////////////////////////////
 			reset_callback_context_records();
 			umock_c_reset_all_calls();
 
-			InitFailPoints();
+			InitTestPoints();
 
 			int negativeTestsInitResult = umock_c_negative_tests_init();
 			ASSERT_ARE_EQUAL(int, 0, negativeTestsInitResult);
 
 
 			// Create
-			FAIL_POINT(FP_DNS, SSL_Get_IPv4(SSL_goood_host_name));
-			FAIL_POINT(FP_TLSIO_MALLOC, gballoc_malloc(IGNORED_NUM_ARG));
+			TEST_POINT(TP_DNS, SSL_Get_IPv4(SSL_goood_host_name));
+			TEST_POINT(TP_TLSIO_MALLOC, gballoc_malloc(IGNORED_NUM_ARG));
 
 			// Open
-			FAIL_POINT(FP_SOCKET_OPEN, SSL_Socket_Create(SSL_Get_IPv4_OK, SSL_goood_port_number));
-			FAIL_POINT(FP_SSL_CTX_new, SSL_CTX_new(IGNORED_NUM_ARG));
-			FAIL_POINT(FP_SSL_new, SSL_new(SSL_Good_Context_Ptr));
-			FAIL_POINT(FP_SSL_set_fd, SSL_set_fd(SSL_Good_Ptr, SSL_Good_Socket));
+			TEST_POINT(TP_SOCKET_OPEN, SSL_Socket_Create(SSL_Get_IPv4_OK, SSL_goood_port_number));
+			TEST_POINT(TP_SSL_CTX_new, SSL_CTX_new(IGNORED_NUM_ARG));
+			TEST_POINT(TP_SSL_new, SSL_new(SSL_Good_Context_Ptr));
+			TEST_POINT(TP_SSL_set_fd, SSL_set_fd(SSL_Good_Ptr, SSL_Good_Socket));
 
 			// SSL_connect can succeed and fail in several different sequences
-			if (fail_point >= FP_SSL_connect_0)
+			if (fail_point >= TP_SSL_connect_0)
 			{
 				switch (fail_point)
 				{
-				case FP_SSL_connect_0:
+				case TP_SSL_connect_0:
 					SSL_ERROR_PREPARE_SEQUENCE(SSL_CONNECT_ERROR_SEQUENCE_0);
-					NO_FAIL_POINT(FP_SSL_connect_0, SSL_connect(SSL_Good_Ptr));
+					NO_FAIL_TEST_POINT(TP_SSL_connect_0, SSL_connect(SSL_Good_Ptr));
 					break;
-				case FP_SSL_connect_1:
+				case TP_SSL_connect_1:
 					SSL_ERROR_PREPARE_SEQUENCE(SSL_CONNECT_ERROR_SEQUENCE_1);
-					NO_FAIL_POINT(FP_SSL_connect_1, SSL_connect(SSL_Good_Ptr));
-					NO_FAIL_POINT(FP_SSL_connect_1, SSL_connect(SSL_Good_Ptr));
-					NO_FAIL_POINT(FP_SSL_connect_1, SSL_connect(SSL_Good_Ptr));
+					NO_FAIL_TEST_POINT(TP_SSL_connect_1, SSL_connect(SSL_Good_Ptr));
+					NO_FAIL_TEST_POINT(TP_SSL_connect_1, SSL_connect(SSL_Good_Ptr));
+					NO_FAIL_TEST_POINT(TP_SSL_connect_1, SSL_connect(SSL_Good_Ptr));
 					break;
-				case FP_SSL_connect_OK_0:
+				case TP_SSL_connect_OK_0:
 					SSL_ERROR_PREPARE_SEQUENCE(SSL_CONNECT_OK_ERROR_SEQUENCE_0);
-					NO_FAIL_POINT(FP_SSL_connect_OK_0, SSL_connect(SSL_Good_Ptr));
+					NO_FAIL_TEST_POINT(TP_SSL_connect_OK_0, SSL_connect(SSL_Good_Ptr));
 					break;
 				default:
 					SSL_ERROR_PREPARE_SEQUENCE(SSL_CONNECT_OK_ERROR_SEQUENCE_1);
-					NO_FAIL_POINT(FP_SSL_connect_OK_1, SSL_connect(SSL_Good_Ptr));
-					NO_FAIL_POINT(FP_SSL_connect_OK_1, SSL_connect(SSL_Good_Ptr));
-					NO_FAIL_POINT(FP_SSL_connect_OK_1, SSL_connect(SSL_Good_Ptr));
+					NO_FAIL_TEST_POINT(TP_SSL_connect_OK_1, SSL_connect(SSL_Good_Ptr));
+					NO_FAIL_TEST_POINT(TP_SSL_connect_OK_1, SSL_connect(SSL_Good_Ptr));
+					NO_FAIL_TEST_POINT(TP_SSL_connect_OK_1, SSL_connect(SSL_Good_Ptr));
 					break;
 				}
 			}
-			//NO_FAIL_POINT(FP_SSL_connect_0, SSL_connect(SSL_Good_Ptr));
 
 
 
 
 
 			// Destroy SSL Connection Members
-			IF_PAST_FAIL_POINT(FP_SSL_new, SSL_free(SSL_Good_Ptr));
-			IF_PAST_FAIL_POINT(FP_SSL_CTX_new, SSL_CTX_free(SSL_Good_Context_Ptr));
-			IF_PAST_FAIL_POINT(FP_SOCKET_OPEN, SSL_Socket_Close(SSL_Good_Socket));
+			IF_PAST_TEST_POINT(TP_SSL_new, SSL_free(SSL_Good_Ptr));
+			IF_PAST_TEST_POINT(TP_SSL_CTX_new, SSL_CTX_free(SSL_Good_Context_Ptr));
+			IF_PAST_TEST_POINT(TP_SOCKET_OPEN, SSL_Socket_Close(SSL_Good_Socket));
 			// Destroy
-			IF_PAST_FAIL_POINT(FP_TLSIO_MALLOC, gballoc_free(IGNORED_PTR_ARG));      //This is the free of TLS_IO_INSTANCE.
+			IF_PAST_TEST_POINT(TP_TLSIO_MALLOC, gballoc_free(IGNORED_PTR_ARG));      //This is the free of TLS_IO_INSTANCE.
 
 
 			umock_c_negative_tests_snapshot();
 
 			umock_c_negative_tests_reset();
 
-			uint16_t fail_index = fail_points[fail_point];
+			uint16_t fail_index = test_points[fail_point];
 			if (fail_index != 0xffff)
 			{
 				umock_c_negative_tests_fail_call(fail_index);
@@ -325,16 +335,18 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
 
 			// Show the fail point description in the output for the sake of 
 			// human readability
-			fail_point_label_output(fail_point);
+			test_point_label_output(fail_point);
 
+			//////////////////////////////////////////////////////////////////////////////////////////////////////
 			///act
+			//////////////////////////////////////////////////////////////////////////////////////////////////////
 
 			const IO_INTERFACE_DESCRIPTION* tlsio_id = tlsio_get_interface_description();
 
-			TLSIO_CONFIG* cfg = fail_point == FP_NULL_CONFIG ? NULL : &tlsio_config;
+			TLSIO_CONFIG* cfg = fail_point == TP_NULL_CONFIG ? NULL : &tlsio_config;
 			CONCRETE_IO_HANDLE tlsio = tlsio_id->concrete_io_create(cfg);
 
-			if (fail_point <= FP_TLSIO_MALLOC)
+			if (fail_point <= TP_TLSIO_MALLOC)
 			{
 				ASSERT_IS_NULL(tlsio);
 			}
@@ -344,14 +356,18 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
 				int open_result = tlsio_id->concrete_io_open(tlsio, on_io_open_complete, IO_OPEN_COMPLETE_CONTEXT, on_bytes_received,
 					IO_BYTES_RECEIVED_CONTEXT, on_io_error, IO_ERROR_CONTEXT);
 				// TODO: Add asserts for open_result plus callbacks
-				SSL_ERROR_ASSERT_RECENT_SEQUENCE();	// special checking for SSL_connect
-				if (fail_point >= FP_SSL_connect_OK_0)
+				SSL_ERROR_ASSERT_LAST_ERROR_SEQUENCE();	// special checking for SSL_connect
+				if (fail_point >= TP_SSL_connect_OK_0)
 				{
+					// Here the open succeeded
 					ASSERT_ARE_EQUAL_WITH_MSG(int, 0, open_result, "Unexpected concrete_io_open failure");
+					ASSERT_ERROR_CALLBACK_COUNT(0);
 				}
 				else
 				{
+					// Here the open failed
 					ASSERT_ARE_NOT_EQUAL_WITH_MSG(int, 0, open_result, "Unexpected concrete_io_open success");
+					ASSERT_ERROR_CALLBACK_COUNT(1);
 				}
 
 				//ASSERT_IS_FALSE(on_io_error_called);
@@ -362,7 +378,9 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
 				tlsio_id->concrete_io_destroy(tlsio);
 			}
 
+			/////////////////////////////////////////////////////////////////////////////////////////////////////
 			///assert
+			/////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 			/**

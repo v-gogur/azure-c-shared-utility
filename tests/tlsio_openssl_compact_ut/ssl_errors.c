@@ -70,7 +70,7 @@ static SSL_error_pair SSL_CONNECT_OK_ERROR_SEQUENCE_1_impl[] =
 	{ 0, 0, true },		// success
 };
 
-void SSL_ERROR_ASSERT_RECENT_SEQUENCE()
+void SSL_ERROR_ASSERT_LAST_ERROR_SEQUENCE()
 {
 	if (SSL_error_sequence_current_main_index != SSL_error_sequence_current_size ||
 		SSL_error_sequence_current_extended_index != SSL_error_sequence_current_size)
@@ -88,7 +88,7 @@ void SSL_ERROR_ASSERT_RECENT_SEQUENCE()
 void SSL_ERROR_PREPARE_SEQUENCE(int sequence)
 {
 	// The initial state must be correct also
-	SSL_ERROR_ASSERT_RECENT_SEQUENCE();
+	SSL_ERROR_ASSERT_LAST_ERROR_SEQUENCE();
 	SSL_error_sequence_current_main_index = 0;
 	SSL_error_sequence_current_extended_index = 0;
 	switch (sequence)
