@@ -358,6 +358,7 @@ int tlsio_openssl_open(CONCRETE_IO_HANDLE tls_io,
 
 	if (on_io_open_complete)
 	{
+		/* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_002: [ The tlsio_openssl_compact shall report the open operation status using the IO_OPEN_RESULT enumerator defined in the xio.h ]*/
 		on_io_open_complete(on_io_open_complete_context, result == 0 ? IO_OPEN_OK : IO_OPEN_ERROR);
 	}
 	return result;
@@ -405,7 +406,7 @@ int tlsio_openssl_send(CONCRETE_IO_HANDLE tls_io, const void* buffer, size_t siz
 			{
 				/* Codes_SRS_TLSIO_SSL_ESP8266_99_015: [ The tlsio_openssl_send wrog state.]*/
 				result = __FAILURE__;
-				LogError("Invalid tlsio_state for send. Expected state is TLSIO_STATE_OPEN.");
+				LogError("Attempted tlsio_openssl_send without a prior successful open call.");
 			}
 			else
 			{

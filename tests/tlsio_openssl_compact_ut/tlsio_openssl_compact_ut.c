@@ -76,6 +76,9 @@ static void reset_callback_context_records()
 
 static void on_io_open_complete(void* context, IO_OPEN_RESULT open_result)
 {
+	/* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_002: [ The tlsio_openssl_compact shall report the open operation status using the IO_OPEN_RESULT enumerator defined in the xio.h ]*/
+	bool result_valid = open_result == IO_OPEN_OK || open_result == IO_OPEN_ERROR;
+	ASSERT_IS_TRUE_WITH_MSG(result_valid, "Invalid IO_OPEN_RESULT");
 	on_io_open_complete_call_count++;
 	on_io_open_complete_result = open_result;
 	on_io_open_complete_context_ok = context == IO_OPEN_COMPLETE_CONTEXT;
@@ -233,6 +236,7 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
 		REGISTER_GLOBAL_MOCK_RETURNS(SSL_CTX_new, SSL_Good_Context_Ptr, NULL);
 		REGISTER_GLOBAL_MOCK_RETURNS(SSL_set_fd, 1, 0);
 		REGISTER_GLOBAL_MOCK_HOOK(SSL_connect, my_SSL_connect);
+		REGISTER_GLOBAL_MOCK_HOOK(SSL_write, my_SSL_write);
 
         /**
          * Or you can combine, for example, in the success case malloc will call my_gballoc_malloc, and for
@@ -315,6 +319,9 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
 			TEST_POINT(TP_DNS_FAIL, SSL_Get_IPv4(SSL_goood_host_name));
 			TEST_POINT(TP_TLSIO_MALLOC_FAIL, gballoc_malloc(IGNORED_NUM_ARG));
 
+			// Handle options
+
+
 			// Open
 			TEST_POINT(TP_SOCKET_OPEN_FAIL, SSL_Socket_Create(SSL_Get_IPv4_OK, SSL_goood_port_number));
 			TEST_POINT(TP_SSL_CTX_new_FAIL, SSL_CTX_new(IGNORED_NUM_ARG));
@@ -327,21 +334,21 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
 				switch (test_point)
 				{
 				case TP_SSL_connect_0_FAIL:
-					SSL_ERROR_PREPARE_SEQUENCE(SSL_CONNECT_ERROR_SEQUENCE_0);
+					SSL_CONNECT_ERROR_PREPARE_SEQUENCE(SSL_CONNECT_FAIL_ERROR_SEQUENCE_0);
 					NO_FAIL_TEST_POINT(TP_SSL_connect_0_FAIL, SSL_connect(SSL_Good_Ptr));
 					break;
 				case TP_SSL_connect_1_FAIL:
-					SSL_ERROR_PREPARE_SEQUENCE(SSL_CONNECT_ERROR_SEQUENCE_1);
+					SSL_CONNECT_ERROR_PREPARE_SEQUENCE(SSL_CONNECT_FAIL_ERROR_SEQUENCE_1);
 					NO_FAIL_TEST_POINT(TP_SSL_connect_1_FAIL, SSL_connect(SSL_Good_Ptr));
 					NO_FAIL_TEST_POINT(TP_SSL_connect_1_FAIL, SSL_connect(SSL_Good_Ptr));
 					NO_FAIL_TEST_POINT(TP_SSL_connect_1_FAIL, SSL_connect(SSL_Good_Ptr));
 					break;
 				case TP_SSL_connect_0_OK:
-					SSL_ERROR_PREPARE_SEQUENCE(SSL_CONNECT_OK_ERROR_SEQUENCE_0);
+					SSL_CONNECT_ERROR_PREPARE_SEQUENCE(SSL_CONNECT_OK_ERROR_SEQUENCE_0);
 					NO_FAIL_TEST_POINT(TP_SSL_connect_0_OK, SSL_connect(SSL_Good_Ptr));
 					break;
 				default:
-					SSL_ERROR_PREPARE_SEQUENCE(SSL_CONNECT_OK_ERROR_SEQUENCE_1);
+					SSL_CONNECT_ERROR_PREPARE_SEQUENCE(SSL_CONNECT_OK_ERROR_SEQUENCE_1);
 					NO_FAIL_TEST_POINT(TP_SSL_connect_1_OK, SSL_connect(SSL_Good_Ptr));
 					NO_FAIL_TEST_POINT(TP_SSL_connect_1_OK, SSL_connect(SSL_Good_Ptr));
 					NO_FAIL_TEST_POINT(TP_SSL_connect_1_OK, SSL_connect(SSL_Good_Ptr));
@@ -393,12 +400,21 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
 
 			if (tlsio)
 			{
+				// Handle options
+				/* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_052 [ The tlsio_openssl_compact_setoption shall do nothing and return 0. ]*/
+				int set_option_result = tlsio_id->concrete_io_setoption(tlsio, NULL, NULL);
+				ASSERT_ARE_EQUAL_WITH_MSG(int, 0, set_option_result, "Unexpected result from concrete_io_setoption");
+
+				/* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_053: [ The tlsio_openssl_compact_retrieveoptions shall do nothing and return NULL. ]*/
+				OPTIONHANDLER_HANDLE retrieve_option_result = tlsio_id->concrete_io_retrieveoptions(tlsio);
+				ASSERT_IS_NULL_WITH_MSG(retrieve_option_result, "Unexpected result from concrete_io_retrieveoptions");
+
 				ON_IO_OPEN_COMPLETE open_callback = test_point != TP_Open_no_callback ? on_io_open_complete : NULL;
 				ASSERT_IO_OPEN_CALLBACK(false, 0);
 				int open_result = tlsio_id->concrete_io_open(tlsio, open_callback, IO_OPEN_COMPLETE_CONTEXT, on_bytes_received,
 					IO_BYTES_RECEIVED_CONTEXT, on_io_error, IO_ERROR_CONTEXT);
 				// TODO: Add asserts for open_result plus callbacks
-				SSL_ERROR_ASSERT_LAST_ERROR_SEQUENCE();	// special checking for SSL_connect
+				SSL_CONNECT_ERROR_ASSERT_LAST_ERROR_SEQUENCE();	// special checking for SSL_connect
 				if (test_point >= TP_SSL_connect_0_OK)
 				{
 					// Here the open succeeded
@@ -415,11 +431,11 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
 				}
 
 				// Close here
-				// TODO:  close
 				ON_IO_CLOSE_COMPLETE close_callback = test_point != TP_Close_no_callback ? on_io_close_complete : NULL;
 				tlsio_id->concrete_io_close(tlsio, close_callback, IO_CLOSE_COMPLETE_CONTEXT);
 				ASSERT_IO_CLOSE_CALLBACK(test_point != TP_Close_no_callback);
 
+				// Finally destroy
 				tlsio_id->concrete_io_destroy(tlsio);
 			}
 

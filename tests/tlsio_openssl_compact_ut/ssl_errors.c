@@ -27,31 +27,40 @@ const char* const SSL_goood_host_name = "fakehost.com";
 
 // Error sequences are composed of pairs of the main error return plus
 // an extended error returned by SSL_get_error()
-typedef struct SSL_error_pair {
+typedef struct SSL_error_pair 
+{
 	int main;
 	int extended;
 	bool isFinalSuccess;
 } SSL_error_pair;
 
-static int SSL_error_sequence_current_main_index = 0;
-static int SSL_error_sequence_current_extended_index = 0;
-static int SSL_error_sequence_current_size = 0;
-static SSL_error_pair* SSL_error_current_sequence = NULL;
+typedef struct SSL_error_sequence
+{
+	int main_index;
+	int extended_index;
+	int size;
+	SSL_error_pair* sequence;
+} SSL_error_sequence;
+
+static  SSL_error_sequence SSL_connect_error_sequence = { 0, 0, 0, NULL };
+static  SSL_error_sequence SSL_write_error_sequence = { 0, 0, 0, NULL };
 
 enum
 {
-	SSL_CONNECT_ERROR_SEQUENCE_0,
-	SSL_CONNECT_ERROR_SEQUENCE_1,
+	SSL_CONNECT_FAIL_ERROR_SEQUENCE_0,
+	SSL_CONNECT_FAIL_ERROR_SEQUENCE_1,
 	SSL_CONNECT_OK_ERROR_SEQUENCE_0,
 	SSL_CONNECT_OK_ERROR_SEQUENCE_1,
+	SSL_WRITE_FAIL_ERROR_SEQUENCE,
+	SSL_WRITE_OK_ERROR_SEQUENCE,
 };
 
-static SSL_error_pair SSL_CONNECT_ERROR_SEQUENCE_0_impl[] =
+static SSL_error_pair SSL_CONNECT_FAIL_ERROR_SEQUENCE_0_impl[] =
 {
 	{ -1, SSL_ERROR_HARD_FAIL, false }
 };
 
-static SSL_error_pair SSL_CONNECT_ERROR_SEQUENCE_1_impl[] =
+static SSL_error_pair SSL_CONNECT_FAIL_ERROR_SEQUENCE_1_impl[] =
 {
 	{ -1, SSL_ERROR_WANT_READ, false },
 	{ -1, SSL_ERROR_WANT_WRITE, false },
@@ -70,37 +79,104 @@ static SSL_error_pair SSL_CONNECT_OK_ERROR_SEQUENCE_1_impl[] =
 	{ 0, 0, true },		// success
 };
 
-void SSL_ERROR_ASSERT_LAST_ERROR_SEQUENCE()
+// Assumes input of "11111111222222223333";
+static SSL_error_pair SSL_WRITE_FAIL_ERROR_SEQUENCE_impl[] =
 {
-	if (SSL_error_sequence_current_main_index != SSL_error_sequence_current_size ||
-		SSL_error_sequence_current_extended_index != SSL_error_sequence_current_size)
+	{ -1, SSL_ERROR_WANT_READ, false },
+	{ -1, SSL_ERROR_WANT_WRITE, false },
+	{ 8, 0, true },		// success
+	{ -1, SSL_ERROR_WANT_READ, false },
+	{ -1, SSL_ERROR_WANT_WRITE, false },
+	{ 8, 0, true },		// success
+	{ -1, SSL_ERROR_WANT_READ, false },
+	{ -1, SSL_ERROR_WANT_WRITE, false },
+	{ -1, SSL_ERROR_HARD_FAIL, false },
+};
+
+// Assumes input of "11111111222222223333";
+static SSL_error_pair SSL_WRITE_OK_ERROR_SEQUENCE_impl[] =
+{
+	{ -1, SSL_ERROR_WANT_READ, false },
+	{ -1, SSL_ERROR_WANT_WRITE, false },
+	{ 8, 0, true },		// success
+	{ -1, SSL_ERROR_WANT_READ, false },
+	{ -1, SSL_ERROR_WANT_WRITE, false },
+	{ 8, 0, true },		// success
+	{ -1, SSL_ERROR_WANT_READ, false },
+	{ -1, SSL_ERROR_WANT_WRITE, false },
+	{ 4, 0, true },		// success
+};
+
+int my_SSL_write(SSL* ssl, uint8_t* buffer, size_t size)
+{
+	ssl;
+	buffer;
+	size;
+	return -1;
+}
+
+
+void SSL_ERROR_ASSERT_LAST_ERROR_SEQUENCE(SSL_error_sequence* seq)
+{
+	if (seq->main_index != seq->size ||
+		seq->extended_index != seq->size)
 	{
 		ASSERT_FAIL("SSL_ERROR_ASSERT_RECENT_SEQUENCE failure");
 	}
 }
 
-#define SSL_ERROR_SEQUENCE_CASE_ENTRY(seq) \
-	case seq :		\
-	SSL_error_current_sequence = seq ## _impl;		\
-	SSL_error_sequence_current_size = sizeof(seq ## _impl) / sizeof(SSL_error_pair);		\
+void SSL_CONNECT_ERROR_ASSERT_LAST_ERROR_SEQUENCE()
+{
+	SSL_ERROR_ASSERT_LAST_ERROR_SEQUENCE(&SSL_connect_error_sequence);
+}
+
+void SSL_WRITE_ERROR_ASSERT_LAST_ERROR_SEQUENCE()
+{
+	SSL_ERROR_ASSERT_LAST_ERROR_SEQUENCE(&SSL_write_error_sequence);
+}
+
+#define SSL_ERROR_SEQUENCE_CASE_ENTRY(s) \
+	case s :		\
+	seq->sequence = s ## _impl;		\
+	seq->size = sizeof(s ## _impl) / sizeof(SSL_error_pair);		\
 	break
 
-void SSL_ERROR_PREPARE_SEQUENCE(int sequence)
+void SSL_CONNECT_ERROR_PREPARE_SEQUENCE(int sequence)
 {
 	// The initial state must be correct also
-	SSL_ERROR_ASSERT_LAST_ERROR_SEQUENCE();
-	SSL_error_sequence_current_main_index = 0;
-	SSL_error_sequence_current_extended_index = 0;
+	SSL_error_sequence* seq = &SSL_connect_error_sequence;
+	SSL_ERROR_ASSERT_LAST_ERROR_SEQUENCE(seq);
+	seq->main_index = 0;
+	seq->extended_index = 0;
 	switch (sequence)
 	{
-		SSL_ERROR_SEQUENCE_CASE_ENTRY(SSL_CONNECT_ERROR_SEQUENCE_0);
-		SSL_ERROR_SEQUENCE_CASE_ENTRY(SSL_CONNECT_ERROR_SEQUENCE_1);
+		SSL_ERROR_SEQUENCE_CASE_ENTRY(SSL_CONNECT_FAIL_ERROR_SEQUENCE_0);
+		SSL_ERROR_SEQUENCE_CASE_ENTRY(SSL_CONNECT_FAIL_ERROR_SEQUENCE_1);
 		SSL_ERROR_SEQUENCE_CASE_ENTRY(SSL_CONNECT_OK_ERROR_SEQUENCE_0);
 		SSL_ERROR_SEQUENCE_CASE_ENTRY(SSL_CONNECT_OK_ERROR_SEQUENCE_1);
 
 		// this is a program bug
-	default: 
-		ASSERT_FAIL("Unexpected value in SSL_ERROR_PREPARE_SEQUENCE");
+	default:
+		ASSERT_FAIL("Unexpected value in SSL_CONNECT_ERROR_PREPARE_SEQUENCE");
+		break;
+	}
+}
+
+void SSL_WRITE_ERROR_PREPARE_SEQUENCE(int sequence)
+{
+	// The initial state must be correct also
+	SSL_error_sequence* seq = &SSL_write_error_sequence;
+	SSL_ERROR_ASSERT_LAST_ERROR_SEQUENCE(seq);
+	seq->main_index = 0;
+	seq->extended_index = 0;
+	switch (sequence)
+	{
+		SSL_ERROR_SEQUENCE_CASE_ENTRY(SSL_WRITE_FAIL_ERROR_SEQUENCE);
+		SSL_ERROR_SEQUENCE_CASE_ENTRY(SSL_WRITE_OK_ERROR_SEQUENCE);
+
+		// this is a program bug
+	default:
+		ASSERT_FAIL("Unexpected value in SSL_WRITE_ERROR_PREPARE_SEQUENCE");
 		break;
 	}
 }
@@ -108,15 +184,15 @@ void SSL_ERROR_PREPARE_SEQUENCE(int sequence)
 static int my_SSL_connect(SSL* ssl)
 {
 	ASSERT_ARE_EQUAL(int, (int)ssl, (int)SSL_Good_Ptr);
-	int result = SSL_error_current_sequence[SSL_error_sequence_current_main_index].main;
-	if (SSL_error_current_sequence[SSL_error_sequence_current_main_index].isFinalSuccess)
+	int result = SSL_connect_error_sequence.sequence[SSL_connect_error_sequence.main_index].main;
+	if (SSL_connect_error_sequence.sequence[SSL_connect_error_sequence.main_index].isFinalSuccess)
 	{
 		// SSL_get_error will not get called since we're succeeding here, so
 		// increment SSL_error_sequence_current_extended_index to satisfy  
 		// SSL_ERROR_ASSERT_RECENT_SEQUENCE that things are as expected.
-		SSL_error_sequence_current_extended_index++;
+		SSL_connect_error_sequence.extended_index++;
 	}
-	SSL_error_sequence_current_main_index++;
+	SSL_connect_error_sequence.main_index++;
 	return result;
 }
 
@@ -126,7 +202,7 @@ int SSL_get_error(SSL* ssl, int last_error)
 {
 	last_error;
 	ASSERT_ARE_EQUAL(int, (int)ssl, (int)SSL_Good_Ptr);
-	int result = SSL_error_current_sequence[SSL_error_sequence_current_extended_index].extended;
-	SSL_error_sequence_current_extended_index++;
+	int result = SSL_connect_error_sequence.sequence[SSL_connect_error_sequence.extended_index].extended;
+	SSL_connect_error_sequence.extended_index++;
 	return result;
 }
