@@ -17,6 +17,7 @@
 const char* const SSL_goood_host_name = "fakehost.com";
 uint8_t* SSL_send_buffer = (uint8_t*)"111111112222222233333333";
 
+
 // The asynchronous nature of SSL_write and SSL_connect means that they must 
 // produce several combinations of results within a single test pass.
 // This is because some of the "errors" they produce are real errors and the
@@ -32,7 +33,7 @@ typedef struct SSL_error_pair
 {
     int main;
     int extended;
-    bool isFinalSuccess;
+    bool expectNoExtendedErrorCall;
 } SSL_error_pair;
 
 typedef struct SSL_error_sequence
@@ -117,7 +118,7 @@ int my_SSL_write(SSL* ssl, uint8_t* buffer, size_t size)
 {
     ASSERT_ARE_EQUAL(int, (int)ssl, (int)SSL_Good_Ptr);
     int result = SSL_write_error_sequence.sequence[SSL_write_error_sequence.main_index].main;
-    if (SSL_write_error_sequence.sequence[SSL_write_error_sequence.main_index].isFinalSuccess)
+    if (SSL_write_error_sequence.sequence[SSL_write_error_sequence.main_index].expectNoExtendedErrorCall)
     {
         // SSL_get_error will not get called since we're succeeding here, so
         // increment SSL_error_sequence_current_extended_index to satisfy  
@@ -131,7 +132,7 @@ int my_SSL_write(SSL* ssl, uint8_t* buffer, size_t size)
 }
 
 
-void SSL_ERROR_ASSERT_LAST_ERROR_SEQUENCE(SSL_error_sequence* seq)
+void assert_last_error_sequence(SSL_error_sequence* seq)
 {
     if (seq->main_index != seq->size ||
         seq->extended_index != seq->size)
@@ -140,14 +141,14 @@ void SSL_ERROR_ASSERT_LAST_ERROR_SEQUENCE(SSL_error_sequence* seq)
     }
 }
 
-void SSL_CONNECT_ERROR_ASSERT_LAST_ERROR_SEQUENCE()
+void ASSERT_SSL_CONNECT_ERROR_SEQUENCE()
 {
-    SSL_ERROR_ASSERT_LAST_ERROR_SEQUENCE(&SSL_connect_error_sequence);
+    assert_last_error_sequence(&SSL_connect_error_sequence);
 }
 
-void SSL_WRITE_ERROR_ASSERT_LAST_ERROR_SEQUENCE()
+void ASSERT_SSL_WRITE_ERROR_SEQUENCE()
 {
-    SSL_ERROR_ASSERT_LAST_ERROR_SEQUENCE(&SSL_write_error_sequence);
+    assert_last_error_sequence(&SSL_write_error_sequence);
 }
 
 #define SSL_ERROR_SEQUENCE_CASE_ENTRY(s) \
@@ -156,11 +157,11 @@ void SSL_WRITE_ERROR_ASSERT_LAST_ERROR_SEQUENCE()
     seq->size = sizeof(s ## _impl) / sizeof(SSL_error_pair);		\
     break
 
-void SSL_CONNECT_ERROR_PREPARE_SEQUENCE(int sequence)
+void PREPARE_ERROR_SEQUENCE_FOR_SSL_CONNECT(int sequence)
 {
     // The initial state must be correct also
     SSL_error_sequence* seq = &SSL_connect_error_sequence;
-    SSL_ERROR_ASSERT_LAST_ERROR_SEQUENCE(seq);
+    assert_last_error_sequence(seq);
     seq->main_index = 0;
     seq->extended_index = 0;
     switch (sequence)
@@ -172,16 +173,16 @@ void SSL_CONNECT_ERROR_PREPARE_SEQUENCE(int sequence)
 
         // this is a program bug
     default:
-        ASSERT_FAIL("Unexpected value in SSL_CONNECT_ERROR_PREPARE_SEQUENCE");
+        ASSERT_FAIL("Unexpected value in PREPARE_ERROR_SEQUENCE_FOR_SSL_CONNECT");
         break;
     }
 }
 
-void SSL_WRITE_ERROR_PREPARE_SEQUENCE(int sequence)
+void PREPARE_ERROR_SEQUENCE_FOR_SSL_WRITE(int sequence)
 {
     // The initial state must be correct also
     SSL_error_sequence* seq = &SSL_write_error_sequence;
-    SSL_ERROR_ASSERT_LAST_ERROR_SEQUENCE(seq);
+    assert_last_error_sequence(seq);
     seq->main_index = 0;
     seq->extended_index = 0;
     switch (sequence)
@@ -191,7 +192,7 @@ void SSL_WRITE_ERROR_PREPARE_SEQUENCE(int sequence)
 
         // this is a program bug
     default:
-        ASSERT_FAIL("Unexpected value in SSL_WRITE_ERROR_PREPARE_SEQUENCE");
+        ASSERT_FAIL("Unexpected value in PREPARE_ERROR_SEQUENCE_FOR_SSL_WRITE");
         break;
     }
 }
@@ -210,7 +211,7 @@ static int my_SSL_connect(SSL* ssl)
 {
     ASSERT_ARE_EQUAL(int, (int)ssl, (int)SSL_Good_Ptr);
     int result = SSL_connect_error_sequence.sequence[SSL_connect_error_sequence.main_index].main;
-    if (SSL_connect_error_sequence.sequence[SSL_connect_error_sequence.main_index].isFinalSuccess)
+    if (SSL_connect_error_sequence.sequence[SSL_connect_error_sequence.main_index].expectNoExtendedErrorCall)
     {
         // SSL_get_error will not get called since we're succeeding here, so
         // increment SSL_error_sequence_current_extended_index to satisfy  

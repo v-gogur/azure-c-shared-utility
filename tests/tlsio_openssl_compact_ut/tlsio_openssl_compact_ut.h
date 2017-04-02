@@ -69,10 +69,10 @@ void my_gballoc_free(void* ptr)
 #include "openssl/ssl.h"
 #undef ENABLE_MOCKS
 
-// These "headers" are actuall source files that are broken out of this file for readability
-#include "./callbacks.h"
-#include "./ssl_errors.h"
-#include "./test_points.h"
+
+#include "callbacks.c"
+#include "ssl_errors.c"
+#include "test_points.c"
 
  /**
   * You can create some global variables that your test will need in some way.
@@ -157,6 +157,8 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
          * You can initialize other global variables here, for instance image that you have a standard void* that will be converted
          *   any pointer that your test needs.
          */
+        //g_GenericPointer = malloc(1);
+        //ASSERT_IS_NOT_NULL(g_GenericPointer);
         tlsio_config.hostname = SSL_goood_host_name;
     }
 
@@ -166,6 +168,8 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
      */
     TEST_SUITE_CLEANUP(TestClassCleanup)
     {
+        //free(g_GenericPointer);
+
         umock_c_deinit();
 
         TEST_MUTEX_DESTROY(g_testByTest);
@@ -184,6 +188,8 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
         }
 
         umock_c_reset_all_calls();
+        
+        //my_callee_open_must_succeed = true; //As default, callee_open will return a valid pointer.
     }
 
     /**
@@ -195,11 +201,10 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
         TEST_MUTEX_RELEASE(g_testByTest);
     }
 
-    // This main_sequence test performs all of the test passes that require sequencing of tlsio calls
-    // To do this, it expands on the mocking framework's negative tests concept by adding
-    // "test point", which are defined in the test_points.h file. These test points capture the 
-    // process of testing the tlsio, and reading the test_points.h file first will make the following
-    // function make a lot more sense.
+
+
+
+    /* Tests_SRS_TEMPLATE_21_001: [ The target_create shall call callee_open to do stuff and allocate the memory. ]*/
     TEST_FUNCTION(tlsio_openssl_main_sequence)
     {
 
@@ -240,7 +245,7 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
             //      TP_SSL_connect_0_OK
             //      TP_SSL_connect_1_OK
             //      TP_Open_no_callback_OK
-            //      TP_Open_while_still_open_FAIL
+            //      TP_Open_while_still_open
             //
             TEST_POINT(TP_SOCKET_OPEN_FAIL, SSL_Socket_Create(SSL_Get_IPv4_OK, SSL_goood_port_number));
             TEST_POINT(TP_SSL_CTX_new_FAIL, SSL_CTX_new(IGNORED_NUM_ARG));
@@ -340,7 +345,7 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
             // The Close test points
             //      TP_Close_NULL_TLSIO_FAIL
             //      TP_Close_no_callback_OK
-            //      TP_Close_when_closed_OK
+            //      TP_Close_when_closed
             //
             // Close SSL Connection Members
             /* Tests_SRS_SRS_TLSIO_OPENSSL_COMPACT_30_017: [ The tlsio_openssl_compact_destroy shall release tlsio_handle and all its associated resources. ]*/
@@ -445,7 +450,7 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
                 //      TP_SSL_connect_0_OK
                 //      TP_SSL_connect_1_OK
                 //      TP_Open_no_callback_OK
-                //      TP_Open_while_still_open_FAIL
+                //      TP_Open_while_still_open
                 //
                 reset_callback_context_records();
                 ACTIVATE_SSL_CONNECT_ERROR_SEQUENCE();
@@ -493,7 +498,7 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
                 }
 
                 // Open while still open
-                if (test_point == TP_Open_while_still_open_FAIL)
+                if (test_point == TP_Open_while_still_open)
                 {
                     reset_callback_context_records();
                     int open_second_result = tlsio_id->concrete_io_open(tlsio_for_open_call, open_callback, IO_OPEN_COMPLETE_CONTEXT, on_bytes_received_for_open,
@@ -587,7 +592,7 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
                 // The Close test points
                 //      TP_Close_NULL_TLSIO_FAIL
                 //      TP_Close_no_callback_OK
-                //      TP_Close_when_closed_OK
+                //      TP_Close_when_closed
                 //
 
                 // Some of the test points don't want or need close here
@@ -596,14 +601,14 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
                 {
                     case TP_SSL_write_FAIL:
                     case TP_Destroy_without_close_OK:
-                    case TP_Open_while_still_open_FAIL:
+                    case TP_Open_while_still_open:
                         do_normal_teardown = false;
                         break;
                 }
 
                 // The main close call is used by the main test sequence, so it's easier to put
                 // these unusual close calls here.
-                if (test_point == TP_Close_NULL_TLSIO_FAIL || test_point == TP_Close_when_closed_OK)
+                if (test_point == TP_Close_NULL_TLSIO_FAIL || test_point == TP_Close_when_closed)
                 {
                     CONCRETE_IO_HANDLE tlsio_for_close = test_point == TP_Close_NULL_TLSIO_FAIL ? NULL : tlsio;
                     tlsio_id->concrete_io_close(tlsio_for_close, NULL, NULL);
@@ -619,7 +624,7 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
                         /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_035: [ The tlsio_openssl_compact_close return value shall be 0 except as noted in the next requirement. ] */
                         int close_return = tlsio_id->concrete_io_close(tlsio, close_callback, IO_CLOSE_COMPLETE_CONTEXT);
 
-                        if (test_point == TP_Close_when_closed_OK)
+                        if (test_point == TP_Close_when_closed)
                         {
                             /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_035: [ The tlsio_openssl_compact_close return value shall be 0 except as noted in the next requirement. ] */
                             ASSERT_ARE_NOT_EQUAL_WITH_MSG(int, 0, close_return, "Unexpected close success value");
