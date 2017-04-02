@@ -73,6 +73,7 @@ static void internal_close(TLS_IO_INSTANCE* tls_io_instance)
 {
     // The TLSIO_STATE_OPEN is semantically identical to the state where
     // SSL_shutdown needs to be called.
+    /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_034: [ The tlsio_openssl_compact_close shall always forcibly close any existing ssl connection. ] */
     if (tls_io_instance->tlsio_state == TLSIO_STATE_OPEN)
     {
         (void)SSL_shutdown(tls_io_instance->ssl);
@@ -394,12 +395,15 @@ int tlsio_openssl_close(CONCRETE_IO_HANDLE tls_io, ON_IO_CLOSE_COMPLETE on_io_cl
     /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_033: [ If the tlsio_handle parameter is NULL, tlsio_openssl_compact_close shall do nothing except log an error and return FAILURE. ]*/
     ASSIGN_AND_CHECK_TLSIO_INSTANCE
     {
+        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_035: [ The tlsio_openssl_compact_close return value shall be 0 except as noted in the next requirement. ] */
         result = 0;
         if (tls_io_instance->tlsio_state == TLSIO_STATE_NOT_OPEN)
         {
+            /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_036: [ If either tlsio_openssl_compact_close or tlsio_openssl_compact_create was called immediately prior to tlsio_openssl_compact_close, then tlsio_openssl_compact_close shall log an error and return FAILURE. ] */
             result = __FAILURE__;
             LogError("tlsio_openssl_close has been called with no prior successful open.");
         }
+        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_034: [ The tlsio_openssl_compact_close shall always forcibly close any existing ssl connection. ] */
         internal_close(tls_io_instance);
     }
 
@@ -408,6 +412,8 @@ int tlsio_openssl_close(CONCRETE_IO_HANDLE tls_io, ON_IO_CLOSE_COMPLETE on_io_cl
     {
         /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_002: [ The tlsio_openssl_compact shall report the open operation status using the IO_OPEN_RESULT enumerator defined in the xio.h ]*/
         /* Codes_SRS_SRS_TLSIO_OPENSSL_COMPACT_30_006: [ The tlsio_openssl_compact shall return the status of all async operations using the callbacks. ]*/
+        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_037: [ If on_io_close_complete is provided, tlsio_openssl_compact_close shall call on_io_close_complete. ] */
+        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_038: [ If on_io_close_complete is provided, tlsio_openssl_compact_close shall pass the callback_context handle into the on_io_close_complete call. ] */
         on_io_close_complete(callback_context);
     }
     return result;

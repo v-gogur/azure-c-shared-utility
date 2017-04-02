@@ -46,6 +46,7 @@ enum
 
 
     TP_Close_no_callback_OK,	// Calling close with no close callback function
+    TP_Close_when_closed,       // Calling close when already closed
 
     TP_destroy_without_close_OK,   // Call destroy without calling close first
 
@@ -87,6 +88,7 @@ static X test_point_names[] =
     TEST_POINT_NAME(TP_Close_NULL_TLSIO_FAIL)
 
     TEST_POINT_NAME(TP_Close_no_callback_OK)
+    TEST_POINT_NAME(TP_Close_when_closed)
     TEST_POINT_NAME(TP_destroy_without_close_OK)
     TEST_POINT_NAME(TP_FINAL_OK)
 };
