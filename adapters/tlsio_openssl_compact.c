@@ -284,8 +284,14 @@ CONCRETE_IO_HANDLE tlsio_openssl_create(void* io_create_parameters)
 
 void tlsio_openssl_destroy(CONCRETE_IO_HANDLE tls_io)
 {
+    /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_016: [ If tlsio_handle is NULL, tlsio_openssl_compact_destroy shall do nothing. ]*/
     ASSIGN_AND_CHECK_TLSIO_INSTANCE
     {
+        if (tls_io_instance->tlsio_state == TLSIO_STATE_OPEN)
+        {
+            LogError("tlsio_openssl_destroy has been called with no prior close.");
+        }
+    /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_017: [ The tlsio_openssl_compact_destroy shall release tlsio_handle and all its associated resources. ]*/
         internal_close(tls_io_instance);
 
         if (tls_io_instance->certificate != NULL)

@@ -358,6 +358,7 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
 
 
             // Create
+            /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_015: [ If the IP for the hostName cannot be found, tlsio_openssl_compact_create shall return NULL. ]*/
             TEST_POINT(TP_DNS_FAIL, SSL_Get_IPv4(SSL_goood_host_name));
             TEST_POINT(TP_TLSIO_MALLOC_FAIL, gballoc_malloc(IGNORED_NUM_ARG));
 
@@ -433,6 +434,7 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
 
 
             // Close SSL Connection Members
+            /* Tests_SRS_SRS_TLSIO_OPENSSL_COMPACT_30_017: [ The tlsio_openssl_compact_destroy shall release tlsio_handle and all its associated resources. ]*/
             IF_PAST_TEST_POINT(TP_SSL_connect_1_FAIL, SSL_shutdown(SSL_Good_Ptr));
             IF_PAST_TEST_POINT(TP_SSL_new_FAIL, SSL_free(SSL_Good_Ptr));
             IF_PAST_TEST_POINT(TP_SSL_CTX_new_FAIL, SSL_CTX_free(SSL_Good_Context_Ptr));
@@ -464,11 +466,16 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
             const IO_INTERFACE_DESCRIPTION* tlsio_id = tlsio_get_interface_description();
 
             /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_005: [ The tlsio_openssl_compact shall receive the connection information using the TLSIO_CONFIG structure defined in tlsio.h ]*/
+            /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_012: [ The tlsio_openssl_compact_create shall receive the connection configuration (TLSIO_CONFIG). ]*/
             TLSIO_CONFIG* cfg = test_point == TP_NULL_CONFIG_FAIL ? NULL : &tlsio_config;
+            /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_009: [ The tlsio_openssl_compact_create shall allocate, initialize, and return an instance of the tlsio for compact OpenSSL. ]*/
             CONCRETE_IO_HANDLE tlsio = tlsio_id->concrete_io_create(cfg);
 
             if (test_point <= TP_TLSIO_MALLOC_FAIL)
             {
+                /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_010: [ If the allocation fails, tlsio_openssl_compact_create shall return NULL. ]*/
+                /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_013: [ If the io_create_parameters value is NULL, tlsio_openssl_compact_create shall log an error and return NULL. ]*/
+                /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_015: [ If the IP for the hostName cannot be found, tlsio_openssl_compact_create shall return NULL. ]*/
                 ASSERT_IS_NULL(tlsio);
             }
 
@@ -492,9 +499,10 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
                 CONCRETE_IO_HANDLE tlsio_for_open_call = test_point != TP_OPEN_NULL_TLSIO_FAIL ? tlsio : NULL;
                 ON_IO_OPEN_COMPLETE open_callback = test_point != TP_Open_no_callback_OK ? on_io_open_complete : NULL;
                 ASSERT_IO_OPEN_CALLBACK(false, 0);
+
                 int open_result = tlsio_id->concrete_io_open(tlsio_for_open_call, open_callback, IO_OPEN_COMPLETE_CONTEXT, on_bytes_received,
                     IO_BYTES_RECEIVED_CONTEXT, on_io_error, IO_ERROR_CONTEXT);
-                // TODO: Add asserts for open_result plus callbacks
+
                 SSL_CONNECT_ERROR_ASSERT_LAST_ERROR_SEQUENCE();	// special checking for SSL_connect
                 if (test_point >= TP_SSL_connect_0_OK)
                 {
@@ -555,13 +563,13 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
                 // Close here
                 bool close_already_called_due_to_SSL_write_error = test_point == TP_SSL_write_FAIL;
 
-                if (!close_already_called_due_to_SSL_write_error)
+                if (!close_already_called_due_to_SSL_write_error && test_point != TP_destroy_without_close_OK)
                 {
-                    ON_IO_CLOSE_COMPLETE close_callback = test_point != TP_Close_no_callback ? on_io_close_complete : NULL;
+                    ON_IO_CLOSE_COMPLETE close_callback = test_point != TP_Close_no_callback_OK ? on_io_close_complete : NULL;
                     if (open_result == 0)
                     {
                         tlsio_id->concrete_io_close(tlsio, close_callback, IO_CLOSE_COMPLETE_CONTEXT);
-                        ASSERT_IO_CLOSE_CALLBACK(test_point != TP_Close_no_callback);
+                        ASSERT_IO_CLOSE_CALLBACK(test_point != TP_Close_no_callback_OK);
                     }
                 }
                 // End close

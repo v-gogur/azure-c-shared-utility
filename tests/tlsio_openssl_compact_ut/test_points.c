@@ -42,7 +42,9 @@ enum
                                 // Send has succeeded here
 
 
-    TP_Close_no_callback,	// Calling close with no close callback function
+    TP_Close_no_callback_OK,	// Calling close with no close callback function
+
+    TP_destroy_without_close_OK,   // Call destroy without calling close first
 
     // NOTE!!!! Update test_point_names below when adding to this enum
 
@@ -78,8 +80,9 @@ static X test_point_names[] =
     TEST_POINT_NAME(TP_SSL_write_OK)
 
 
-    TEST_POINT_NAME(TP_Close_no_callback)
+    TEST_POINT_NAME(TP_Close_no_callback_OK)
 
+    TEST_POINT_NAME(TP_destroy_without_close_OK)
     TEST_POINT_NAME(TP_FINAL_OK)
 };
 
