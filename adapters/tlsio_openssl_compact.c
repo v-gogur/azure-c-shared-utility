@@ -223,6 +223,7 @@ static int create_and_connect_ssl(TLS_IO_INSTANCE* tls_io_instance)
 }
 
 /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_009: [ The tlsio_openssl_compact_create shall allocate, initialize, and return an instance of the tlsio for compact OpenSSL. ]*/
+/* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_005: [ The tlsio_openssl_compact shall receive the connection information using the TLSIO_CONFIG structure defined in tlsio.h ]*/
 CONCRETE_IO_HANDLE tlsio_openssl_create(void* io_create_parameters)
 {
     /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_005: [ The tlsio_openssl_compact shall receive the connection information using the TLSIO_CONFIG structure defined in tlsio.h ]*/
@@ -281,7 +282,6 @@ CONCRETE_IO_HANDLE tlsio_openssl_create(void* io_create_parameters)
     return (CONCRETE_IO_HANDLE)result;
 }
 
-/* Codes_SRS_TLSIO_SSL_ESP8266_99_010: [ The tlsio_openssl_destroy succeed ]*/
 void tlsio_openssl_destroy(CONCRETE_IO_HANDLE tls_io)
 {
     ASSIGN_AND_CHECK_TLSIO_INSTANCE
@@ -309,7 +309,7 @@ void tlsio_openssl_destroy(CONCRETE_IO_HANDLE tls_io)
 }
 
 
-/* Codes_SRS_TLSIO_SSL_ESP8266_99_008: [ The tlsio_openssl_open shall return 0 when succeed ]*/
+/* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_004: [ The tlsio_openssl_compact shall call the callbacks functions defined in the xio.h ]*/
 int tlsio_openssl_open(CONCRETE_IO_HANDLE tls_io,
     ON_IO_OPEN_COMPLETE on_io_open_complete, void* on_io_open_complete_context,
     ON_BYTES_RECEIVED on_bytes_received, void* on_bytes_received_context,
@@ -331,7 +331,6 @@ int tlsio_openssl_open(CONCRETE_IO_HANDLE tls_io,
         }
         else
         {
-            /* Codes_SRS_TLSIO_SSL_ESP8266_99_007: [ The tlsio_openssl_open invalid state. ]*/
             if (tls_io_instance->tlsio_state != TLSIO_STATE_NOT_OPEN)
             {
                 result = __FAILURE__;
@@ -356,16 +355,18 @@ int tlsio_openssl_open(CONCRETE_IO_HANDLE tls_io,
         }
     }
 
-        if (on_io_open_complete)
-        {
-            /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_002: [ The tlsio_openssl_compact shall report the open operation status using the IO_OPEN_RESULT enumerator defined in the xio.h ]*/
-            on_io_open_complete(on_io_open_complete_context, result == 0 ? IO_OPEN_OK : IO_OPEN_ERROR);
-        }
+    /* Codes_SSRS_TLSIO_OPENSSL_COMPACT_30_007: [ If the callback function is set as NULL. The tlsio_openssl_compact shall not call anything. */
+    if (on_io_open_complete)
+    {
+        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_002: [ The tlsio_openssl_compact shall report the open operation status using the IO_OPEN_RESULT enumerator defined in the xio.h ]*/
+        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_006: [ The tlsio_openssl_compact shall return the status of all async operations using the callbacks. ]*/
+        on_io_open_complete(on_io_open_complete_context, result == 0 ? IO_OPEN_OK : IO_OPEN_ERROR);
+    }
     return result;
 }
 
 
-/* Codes_SRS_TLSIO_SSL_ESP8266_99_013: [ The tlsio_openssl_close succeed.]*/
+/* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_004: [ The tlsio_openssl_compact shall call the callbacks functions defined in the xio.h ]*/
 int tlsio_openssl_close(CONCRETE_IO_HANDLE tls_io, ON_IO_CLOSE_COMPLETE on_io_close_complete, void* callback_context)
 {
     int result = 0;
@@ -379,13 +380,18 @@ int tlsio_openssl_close(CONCRETE_IO_HANDLE tls_io, ON_IO_CLOSE_COMPLETE on_io_cl
         }
         internal_close(tls_io_instance);
     }
-        if (on_io_close_complete != NULL)
-        {
-            on_io_close_complete(callback_context);
-        }
+
+    /* Codes_SSRS_TLSIO_OPENSSL_COMPACT_30_007: [ If the callback function is set as NULL. The tlsio_openssl_compact shall not call anything. */
+    if (on_io_close_complete != NULL)
+    {
+        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_002: [ The tlsio_openssl_compact shall report the open operation status using the IO_OPEN_RESULT enumerator defined in the xio.h ]*/
+        /* Codes_SRS_SRS_TLSIO_OPENSSL_COMPACT_30_006: [ The tlsio_openssl_compact shall return the status of all async operations using the callbacks. ]*/
+        on_io_close_complete(callback_context);
+    }
     return result;
 }
 
+/* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_004: [ The tlsio_openssl_compact shall call the callbacks functions defined in the xio.h ]*/
 int tlsio_openssl_send(CONCRETE_IO_HANDLE tls_io, const void* buffer, size_t size, ON_SEND_COMPLETE on_send_complete, void* callback_context)
 {
     IO_SEND_RESULT sr = IO_SEND_ERROR;
@@ -396,7 +402,6 @@ int tlsio_openssl_send(CONCRETE_IO_HANDLE tls_io, const void* buffer, size_t siz
     {
         if (buffer == NULL)
         {
-            /* Codes_SRS_TLSIO_SSL_ESP8266_99_014: [ The tlsio_openssl_send NULL instance.]*/
             result = __FAILURE__;
             LogError("NULL buffer.");
         }
@@ -404,7 +409,6 @@ int tlsio_openssl_send(CONCRETE_IO_HANDLE tls_io, const void* buffer, size_t siz
         {
             if (tls_io_instance->tlsio_state != TLSIO_STATE_OPEN)
             {
-                /* Codes_SRS_TLSIO_SSL_ESP8266_99_015: [ The tlsio_openssl_send wrog state.]*/
                 result = __FAILURE__;
                 LogError("Attempted tlsio_openssl_send without a prior successful open call.");
             }
@@ -415,8 +419,6 @@ int tlsio_openssl_send(CONCRETE_IO_HANDLE tls_io, const void* buffer, size_t siz
 
                 while (size > 0)
                 {
-                    /* Codes_SRS_TLSIO_SSL_ESP8266_99_016: [ The tlsio_openssl_send SSL_write success]*/
-                    /* Codes_SRS_TLSIO_SSL_ESP8266_99_017: [ The tlsio_openssl_send SSL_write failure]*/
                     res = SSL_write(tls_io_instance->ssl, ((uint8_t*)buffer) + total_written, size);
                     // https://wiki.openssl.org/index.php/Manual:SSL_write(3)
 
@@ -453,14 +455,17 @@ int tlsio_openssl_send(CONCRETE_IO_HANDLE tls_io, const void* buffer, size_t siz
         }
     }
 
+    /* Codes_SSRS_TLSIO_OPENSSL_COMPACT_30_007: [ If the callback function is set as NULL. The tlsio_openssl_compact shall not call anything. */
     if (on_send_complete != NULL)
     {
+        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_002: [ The tlsio_openssl_compact shall report the open operation status using the IO_OPEN_RESULT enumerator defined in the xio.h ]*/
+        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_006: [ The tlsio_openssl_compact shall return the status of all async operations using the callbacks. ]*/
         on_send_complete(callback_context, sr);
     }
     return result;
 }
 
-/* Codes_SRS_TLSIO_SSL_ESP8266_99_019: [ The tlsio_openssl_dowork succeed]*/
+/* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_004: [ The tlsio_openssl_compact shall call the callbacks functions defined in the xio.h ]*/
 void tlsio_openssl_dowork(CONCRETE_IO_HANDLE tls_io)
 {
     ASSIGN_AND_CHECK_TLSIO_INSTANCE
@@ -476,6 +481,7 @@ void tlsio_openssl_dowork(CONCRETE_IO_HANDLE tls_io)
             {
                 // tls_io_instance->on_bytes_received was already checked for NULL
                 // in the call to tlsio_openssl_open
+                /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_006: [ The tlsio_openssl_compact shall return the status of all async operations using the callbacks. ]*/
                 tls_io_instance->on_bytes_received(tls_io_instance->on_bytes_received_context, buffer, rcv_bytes);
             }
         }
