@@ -100,6 +100,8 @@ static void on_io_open_complete(void* context, IO_OPEN_RESULT open_result)
 
 /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_004: [ The tlsio_openssl_compact shall call the callbacks functions defined in the xio.h ]*/
 /* Tests_SRS_SRS_TLSIO_OPENSSL_COMPACT_30_006: [ The tlsio_openssl_compact shall return the status of all async operations using the callbacks. ]*/
+/* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_041: [ The tlsio_openssl_compact_send shall call the provided on_send_complete callback function. ]*/
+/* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_042: [ The tlsio_openssl_compact_send shall supply the provided callback_context when it calls on_send_complete. ]*/
 static void on_io_send_complete(void* context, IO_SEND_RESULT send_result)
 {
     on_io_send_complete_call_count++;
@@ -421,6 +423,7 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
             }
             if (expect_ssl_write)
             {
+                /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_043: [ if the ssl was not able to send all data in the buffer, the tlsio_openssl_compact_send shall call the ssl again to send the remaining bytes. ]*/
                 // The first SSL_write succeeds after a SSL_ERROR_WANT_READ and a SSL_ERROR_WANT_WRITE
                 NO_FAIL_TEST_POINT(TP_SSL_write_FAIL, SSL_write(SSL_Good_Ptr, SSL_send_buffer, 20));
                 NO_FAIL_TEST_POINT(TP_SSL_write_FAIL, SSL_write(SSL_Good_Ptr, SSL_send_buffer, 20));
@@ -550,13 +553,16 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
 
 
                 /////////////////////////////////////////////////////////////////////////////////////////////////////
-                // Write
+                // Send
                 if (test_point >= TP_SEND_NULL_BUFFER_FAIL && test_point <= TP_SSL_write_OK)
                 {
                     ACTIVATE_SSL_WRITE_ERROR_SEQUENCE();
                     reset_callback_context_records();
+                    /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_046: [ If the buffer is NULL, the tlsio_openssl_compact_send shall do nothing except log the error and return FAILURE. ]*/
                     uint8_t* buffer = test_point == TP_SEND_NULL_BUFFER_FAIL ? NULL : SSL_send_buffer;
-                    size_t bytes_to_send = 20;	// 4 less than the buffer size
+                    /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_047: [ If the size is 0, the tlsio_openssl_compact_send shall do nothing and return 0. ]*/
+                    size_t bytes_to_send = test_point == TP_Send_zero_bytes_OK ? 0 :20;	// 20 is 4 less than the buffer size
+                    /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_039: [ If the tlsio_handle parameter is NULL, tlsio_openssl_compact_send shall do nothing except log an error and return FAILURE. ] ]*/
                     CONCRETE_IO_HANDLE tlsio_for_send_call = test_point == TP_SEND_NULL_TLSIO_FAIL ? 0 : tlsio;
 
                     int send_result = tlsio_id->concrete_io_send(tlsio_for_send_call, 
@@ -564,22 +570,28 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
 
                     if (test_point >= TP_SSL_write_OK)
                     {
+                        // Successes here
                         ASSERT_ARE_EQUAL_WITH_MSG(int, 0, send_result, "Unexpected concrete_io_send failure");
                         /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_003: [ The tlsio_openssl_compact shall report the send operation status using the IO_SEND_RESULT enumerator defined in the xio.h ]*/
                         /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_007: [ If the callback function is set as NULL. The tlsio_openssl_compact shall not call anything. ]*/
+                        /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_041: [ The tlsio_openssl_compact_send shall call the provided on_send_complete callback function. ]*/
+                        /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_045: [ if the ssl was able to send all the bytes in the buffer, the tlsio_openssl_compact_send shall call the on_send_complete with IO_SEND_OK, and return 0 ]*/
                         ASSERT_IO_SEND_CALLBACK(test_point != TP_Send_no_callback_OK, IO_SEND_OK);
                     }
                     else
                     {
+                        // Failures here
                         ASSERT_ARE_NOT_EQUAL_WITH_MSG(int, 0, send_result, "Unexpected concrete_io_send success");
                         bool expected_io_error_callback = 
                             (test_point == TP_SEND_NULL_TLSIO_FAIL || test_point == TP_SEND_NULL_BUFFER_FAIL) ? false : true;
                         ASSERT_IO_ERROR_CALLBACK(expected_io_error_callback);
                         /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_003: [ The tlsio_openssl_compact shall report the send operation status using the IO_SEND_RESULT enumerator defined in the xio.h ]*/
+                        /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_041: [ The tlsio_openssl_compact_send shall call the provided on_send_complete callback function. ]*/
+                        /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_044: [ if the ssl fails before sending all of the bytes in the buffer, the tlsio_openssl_compact_send shall call the on_send_complete with IO_SEND_ERROR, and return FAILURE. ]*/
                         ASSERT_IO_SEND_CALLBACK(true, IO_SEND_ERROR);
                     }
                 }
-                // End write
+                // End send
                 /////////////////////////////////////////////////////////////////////////////////////////////////////
 
                 /////////////////////////////////////////////////////////////////////////////////////////////////////
