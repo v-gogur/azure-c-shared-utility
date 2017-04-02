@@ -22,6 +22,7 @@ enum
 
                                 // tlsio_openssl_open
     TP_OPEN_NULL_TLSIO_FAIL,	// tlsio_openssl_open with null tlsio
+    TP_OPEN_NULL_BYTES_R_FAIL,	// tlsio_openssl_open with null on_bytes_received
     TP_SOCKET_OPEN_FAIL,	    // creation of the TLS socket fails
     TP_SSL_CTX_new_FAIL,	    // SSL_CTX_new fails
     TP_SSL_new_FAIL,		    // SSL_new fails
@@ -31,6 +32,7 @@ enum
     TP_SSL_connect_0_OK,	    // SSL_connect fails with success sequence 0
     TP_SSL_connect_1_OK,	    // SSL_connect fails with success sequence 1
     TP_Open_no_callback_OK,	    // Open succeeded but no on_open callback privided
+    TP_Open_while_still_open,	// Open called while still open
                                 // Open has succeeded here
 
                                 // tlsio_openssl_send
@@ -39,6 +41,7 @@ enum
     TP_SSL_write_FAIL,          // SSl_write fails
     TP_SSL_write_OK,            // SSl_write succeeds
     TP_Send_no_callback_OK,     // SSl_write succeeds with no callback provided
+    TP_Close_NULL_TLSIO_FAIL,   // Close with null tlsio
                                 // Send has succeeded here
 
 
@@ -64,6 +67,7 @@ static X test_point_names[] =
     TEST_POINT_NAME(TP_DNS_FAIL)
     TEST_POINT_NAME(TP_TLSIO_MALLOC_FAIL)
     TEST_POINT_NAME(TP_OPEN_NULL_TLSIO_FAIL)
+    TEST_POINT_NAME(TP_OPEN_NULL_BYTES_R_FAIL)
     TEST_POINT_NAME(TP_SOCKET_OPEN_FAIL)
     TEST_POINT_NAME(TP_SSL_CTX_new_FAIL)
     TEST_POINT_NAME(TP_SSL_new_FAIL)
@@ -73,15 +77,16 @@ static X test_point_names[] =
     TEST_POINT_NAME(TP_SSL_connect_0_OK)
     TEST_POINT_NAME(TP_SSL_connect_1_OK)
     TEST_POINT_NAME(TP_Open_no_callback_OK)
+    TEST_POINT_NAME(TP_Open_while_still_open)
+
     TEST_POINT_NAME(TP_SEND_NULL_BUFFER_FAIL)
     TEST_POINT_NAME(TP_SEND_NULL_TLSIO_FAIL)
     TEST_POINT_NAME(TP_SSL_write_FAIL)
     TEST_POINT_NAME(TP_SSL_write_OK)
-    TEST_POINT_NAME(TP_SSL_write_OK)
-
+    TEST_POINT_NAME(TP_Send_no_callback_OK)
+    TEST_POINT_NAME(TP_Close_NULL_TLSIO_FAIL)
 
     TEST_POINT_NAME(TP_Close_no_callback_OK)
-
     TEST_POINT_NAME(TP_destroy_without_close_OK)
     TEST_POINT_NAME(TP_FINAL_OK)
 };
