@@ -16,9 +16,9 @@ set(${theseTestsName}_c_files
 )
 
 set(${theseTestsName}_h_files
-##
-# Include all headers that you need to execute the test. Normally we don't need any.
-##
+callbacks.h
+ssl_errors.h
+test_points.h
 )
 
 include_directories(.)
