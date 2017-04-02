@@ -63,6 +63,7 @@ static bool on_io_close_context_ok;
 
 static int on_io_send_complete_call_count;
 static bool on_io_send_complete_context_ok;
+static IO_SEND_RESULT on_io_send_complete_result;
 
 #define IO_OPEN_COMPLETE_CONTEXT (void*)55
 #define IO_ERROR_CONTEXT (void*)66
@@ -81,6 +82,7 @@ static void reset_callback_context_records()
     on_io_close_context_ok = false;
     on_io_send_complete_call_count = 0;
     on_io_send_complete_context_ok = false;
+    on_io_send_complete_result = -1;
 }
 
 static void on_io_open_complete(void* context, IO_OPEN_RESULT open_result)
@@ -97,7 +99,7 @@ static void on_io_send_complete(void* context, IO_SEND_RESULT send_result)
 {
     on_io_send_complete_call_count++;
     on_io_send_complete_context_ok = context == IO_SEND_COMPLETE_CONTEXT;
-    send_result;
+    on_io_send_complete_result = send_result;
 }
 
 static void on_io_close_complete(void* context)
@@ -136,6 +138,20 @@ static void ASSERT_IO_OPEN_CALLBACK(bool called, int open_result)
         ASSERT_ARE_EQUAL_WITH_MSG(int, 1, on_io_open_complete_call_count, "on_io_open_complete_callback count mismatch");
         ASSERT_ARE_EQUAL_WITH_MSG(int, on_io_open_complete_result, open_result, "on_io_open_complete result mismatch");
         ASSERT_IS_TRUE_WITH_MSG(on_io_open_complete_context_ok, "io_open_complete_context not passed");
+    }
+    else
+    {
+        ASSERT_ARE_EQUAL_WITH_MSG(int, 0, on_io_open_complete_call_count, "unexpected on_io_open_complete_callback");
+    }
+}
+
+static void ASSERT_IO_SEND_CALLBACK(bool called, int open_result)
+{
+    if (called)
+    {
+        ASSERT_ARE_EQUAL_WITH_MSG(int, 1, on_io_send_complete_call_count, "on_io_send_complete_callback count mismatch");
+        ASSERT_ARE_EQUAL_WITH_MSG(int, on_io_send_complete_result, open_result, "on_io_send_complete result mismatch");
+        ASSERT_IS_TRUE_WITH_MSG(on_io_send_complete_context_ok, "io_send_complete_context not passed");
     }
     else
     {
@@ -323,7 +339,6 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
             /////////////////////////////////////////////////////////////////////////////
             ///arrange
             /////////////////////////////////////////////////////////////////////////////
-            reset_callback_context_records();
             umock_c_reset_all_calls();
 
             InitTestPoints();
@@ -373,7 +388,8 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
                 }
             }
 
-            // The Send tests for the Open state
+            // The Send tests for tlsio is in the Open state
+            bool expect_ssl_write = false;
             switch (test_point)
             {
             case TP_SEND_NULL_BUFFER_FAIL:
@@ -381,24 +397,29 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
                 // No expected call preparation needed here
                 break;
             case TP_SSL_write_FAIL:
+                expect_ssl_write = true;
                 SSL_WRITE_ERROR_PREPARE_SEQUENCE(SSL_WRITE_FAIL_ERROR_SEQUENCE);
-            	NO_FAIL_TEST_POINT(TP_SSL_connect_1_FAIL, SSL_connect(SSL_Good_Ptr));
-            	NO_FAIL_TEST_POINT(TP_SSL_connect_1_FAIL, SSL_connect(SSL_Good_Ptr));
-            	NO_FAIL_TEST_POINT(TP_SSL_connect_1_FAIL, SSL_connect(SSL_Good_Ptr));
-            	break;
-            //case TP_SSL_connect_0_OK:
-            //	SSL_CONNECT_ERROR_PREPARE_SEQUENCE(SSL_CONNECT_OK_ERROR_SEQUENCE_0);
-            //	NO_FAIL_TEST_POINT(TP_SSL_connect_0_OK, SSL_connect(SSL_Good_Ptr));
-            //	break;
-            //default:
-            //	SSL_CONNECT_ERROR_PREPARE_SEQUENCE(SSL_CONNECT_OK_ERROR_SEQUENCE_1);
-            //	NO_FAIL_TEST_POINT(TP_SSL_connect_1_OK, SSL_connect(SSL_Good_Ptr));
-            //	NO_FAIL_TEST_POINT(TP_SSL_connect_1_OK, SSL_connect(SSL_Good_Ptr));
-            //	NO_FAIL_TEST_POINT(TP_SSL_connect_1_OK, SSL_connect(SSL_Good_Ptr));
-            //	break;
+                break;
+            case TP_SSL_write_OK:
+                expect_ssl_write = true;
+                SSL_WRITE_ERROR_PREPARE_SEQUENCE(SSL_WRITE_OK_ERROR_SEQUENCE);
+                break;
             }
-
-            SSL_WRITE_ERROR_PREPARE_SEQUENCE
+            if (expect_ssl_write)
+            {
+                // The first SSL_write succeeds after a SSL_ERROR_WANT_READ and a SSL_ERROR_WANT_WRITE
+                NO_FAIL_TEST_POINT(TP_SSL_write_FAIL, SSL_write(SSL_Good_Ptr, SSL_send_buffer, 20));
+                NO_FAIL_TEST_POINT(TP_SSL_write_FAIL, SSL_write(SSL_Good_Ptr, SSL_send_buffer, 20));
+                NO_FAIL_TEST_POINT(TP_SSL_write_FAIL, SSL_write(SSL_Good_Ptr, SSL_send_buffer, 20));
+                // The second SSL_write succeeds after a SSL_ERROR_WANT_READ and a SSL_ERROR_WANT_WRITE
+                NO_FAIL_TEST_POINT(TP_SSL_write_FAIL, SSL_write(SSL_Good_Ptr, (SSL_send_buffer + 8), 12));
+                NO_FAIL_TEST_POINT(TP_SSL_write_FAIL, SSL_write(SSL_Good_Ptr, (SSL_send_buffer + 8), 12));
+                NO_FAIL_TEST_POINT(TP_SSL_write_FAIL, SSL_write(SSL_Good_Ptr, (SSL_send_buffer + 8), 12));
+                // The third SSL_write either succeeds or fails after a SSL_ERROR_WANT_READ and a SSL_ERROR_WANT_WRITE
+                NO_FAIL_TEST_POINT(TP_SSL_write_FAIL, SSL_write(SSL_Good_Ptr, (SSL_send_buffer + 16), 4));
+                NO_FAIL_TEST_POINT(TP_SSL_write_FAIL, SSL_write(SSL_Good_Ptr, (SSL_send_buffer + 16), 4));
+                NO_FAIL_TEST_POINT(TP_SSL_write_FAIL, SSL_write(SSL_Good_Ptr, (SSL_send_buffer + 16), 4));
+            }
 
 
             // Close SSL Connection Members
@@ -455,6 +476,8 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
 
                 /////////////////////////////////////////////////////////////////////////////////////////////////////
                 // Open
+                reset_callback_context_records();
+                ACTIVATE_SSL_CONNECT_ERROR_SEQUENCE();
                 CONCRETE_IO_HANDLE tlsio_for_open_call = test_point != TP_OPEN_NULL_TLSIO_FAIL ? tlsio : NULL;
                 ON_IO_OPEN_COMPLETE open_callback = test_point != TP_Open_no_callback_OK ? on_io_open_complete : NULL;
                 ASSERT_IO_OPEN_CALLBACK(false, 0);
@@ -480,20 +503,24 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
                 // End Open
                 /////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
                 /////////////////////////////////////////////////////////////////////////////////////////////////////
                 // Write
                 if (test_point >= TP_SEND_NULL_BUFFER_FAIL && test_point <= TP_SSL_write_OK)
                 {
-                    char* buffer = test_point == TP_SEND_NULL_BUFFER_FAIL ? NULL : "111111112222222233333333";
+                    ACTIVATE_SSL_WRITE_ERROR_SEQUENCE();
+                    reset_callback_context_records();
+                    uint8_t* buffer = test_point == TP_SEND_NULL_BUFFER_FAIL ? NULL : SSL_send_buffer;
                     size_t bytes_to_send = 20;	// 4 less than the buffer size
                     CONCRETE_IO_HANDLE tlsio_for_send_call = test_point == TP_SEND_NULL_TLSIO_FAIL ? 0 : tlsio;
+
                     int send_result = tlsio_id->concrete_io_send(tlsio_for_send_call, 
                         buffer, bytes_to_send, on_io_send_complete, IO_SEND_COMPLETE_CONTEXT);
-                    send_result;
-                    if (test_point > TP_SSL_write_OK)
+
+                    if (test_point >= TP_SSL_write_OK)
                     {
                         ASSERT_ARE_EQUAL_WITH_MSG(int, 0, send_result, "Unexpected concrete_io_send failure");
-
+                        ASSERT_IO_SEND_CALLBACK(test_point != TP_Send_no_callback_OK, IO_SEND_OK);
                     }
                     else
                     {
@@ -501,7 +528,7 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
                         bool expected_io_error_callback = 
                             (test_point == TP_SEND_NULL_TLSIO_FAIL || test_point == TP_SEND_NULL_BUFFER_FAIL) ? false : true;
                         ASSERT_IO_ERROR_CALLBACK(expected_io_error_callback);
-
+                        ASSERT_IO_SEND_CALLBACK(true, IO_SEND_ERROR);
                     }
                 }
                 // End write
@@ -509,11 +536,16 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
 
                 /////////////////////////////////////////////////////////////////////////////////////////////////////
                 // Close here
-                ON_IO_CLOSE_COMPLETE close_callback = test_point != TP_Close_no_callback ? on_io_close_complete : NULL;
-                if (open_result == 0)
+                bool close_already_called_due_to_SSL_write_error = test_point == TP_SSL_write_FAIL;
+
+                if (!close_already_called_due_to_SSL_write_error)
                 {
-                    tlsio_id->concrete_io_close(tlsio, close_callback, IO_CLOSE_COMPLETE_CONTEXT);
-                    ASSERT_IO_CLOSE_CALLBACK(test_point != TP_Close_no_callback);
+                    ON_IO_CLOSE_COMPLETE close_callback = test_point != TP_Close_no_callback ? on_io_close_complete : NULL;
+                    if (open_result == 0)
+                    {
+                        tlsio_id->concrete_io_close(tlsio, close_callback, IO_CLOSE_COMPLETE_CONTEXT);
+                        ASSERT_IO_CLOSE_CALLBACK(test_point != TP_Close_no_callback);
+                    }
                 }
                 // End close
                 /////////////////////////////////////////////////////////////////////////////////////////////////////

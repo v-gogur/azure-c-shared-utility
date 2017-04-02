@@ -15,6 +15,7 @@
 
 #define SSL_goood_port_number  447
 const char* const SSL_goood_host_name = "fakehost.com";
+uint8_t* SSL_send_buffer = (uint8_t*)"111111112222222233333333";
 
 // The asynchronous nature of SSL_write and SSL_connect means that they must 
 // produce several combinations of results within a single test pass.
@@ -155,7 +156,6 @@ void SSL_CONNECT_ERROR_PREPARE_SEQUENCE(int sequence)
 {
     // The initial state must be correct also
     SSL_error_sequence* seq = &SSL_connect_error_sequence;
-    current_ssl_get_error_sequence = seq;
     SSL_ERROR_ASSERT_LAST_ERROR_SEQUENCE(seq);
     seq->main_index = 0;
     seq->extended_index = 0;
@@ -177,7 +177,6 @@ void SSL_WRITE_ERROR_PREPARE_SEQUENCE(int sequence)
 {
     // The initial state must be correct also
     SSL_error_sequence* seq = &SSL_write_error_sequence;
-    current_ssl_get_error_sequence = seq;
     SSL_ERROR_ASSERT_LAST_ERROR_SEQUENCE(seq);
     seq->main_index = 0;
     seq->extended_index = 0;
@@ -191,6 +190,16 @@ void SSL_WRITE_ERROR_PREPARE_SEQUENCE(int sequence)
         ASSERT_FAIL("Unexpected value in SSL_WRITE_ERROR_PREPARE_SEQUENCE");
         break;
     }
+}
+
+void ACTIVATE_SSL_CONNECT_ERROR_SEQUENCE()
+{
+    current_ssl_get_error_sequence = &SSL_connect_error_sequence;
+}
+
+void ACTIVATE_SSL_WRITE_ERROR_SEQUENCE()
+{
+    current_ssl_get_error_sequence = &SSL_write_error_sequence;
 }
 
 static int my_SSL_connect(SSL* ssl)
