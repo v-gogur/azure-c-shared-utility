@@ -44,6 +44,9 @@ enum
     TP_Send_zero_bytes_OK,      // SSl_write succeeds at sending zero bytes
                                 // Send has succeeded here
 
+    TP_SSL_read_NULL_TLSIO_FAIL,    // Do work with null tlsio
+    TP_SSL_read_OK,             // Do work that succeeds
+
 
     TP_Close_NULL_TLSIO_FAIL,   // Close with null tlsio
     TP_Close_no_callback_OK,	// Calling close with no close callback function
@@ -87,6 +90,10 @@ static X test_point_names[] =
     TEST_POINT_NAME(TP_SSL_write_OK)
     TEST_POINT_NAME(TP_Send_no_callback_OK)
     TEST_POINT_NAME(TP_Send_zero_bytes_OK)
+
+    TEST_POINT_NAME(TP_SSL_read_NULL_TLSIO_FAIL)
+    TEST_POINT_NAME(TP_SSL_read_OK)
+
 
     TEST_POINT_NAME(TP_Close_NULL_TLSIO_FAIL)
     TEST_POINT_NAME(TP_Close_no_callback_OK)

@@ -221,6 +221,17 @@ static int my_SSL_connect(SSL* ssl)
     return result;
 }
 
+int my_SSL_read(SSL* ssl, uint8_t* buffer, size_t size)
+{
+    size;
+    ASSERT_ARE_EQUAL(int, (int)ssl, (int)SSL_Good_Ptr);
+    // There's no interesting tlsio behavior to test with
+    // varying message lengths, so we'll just use a tiny one.
+    buffer[0] = 4;
+    buffer[1] = 2;
+    return 2;
+}
+
 // SSL_get_error is guaranteed to be called after every non-successful
 // call to my_SSL_connect.
 int SSL_get_error(SSL* ssl, int last_error)

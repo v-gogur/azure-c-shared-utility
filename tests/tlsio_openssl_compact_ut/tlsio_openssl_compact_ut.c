@@ -65,6 +65,9 @@ static int on_io_send_complete_call_count;
 static bool on_io_send_complete_context_ok;
 static IO_SEND_RESULT on_io_send_complete_result;
 
+static int on_bytes_received_call_count;
+static bool on_bytes_received_context_ok;
+
 #define IO_OPEN_COMPLETE_CONTEXT (void*)55
 #define IO_ERROR_CONTEXT (void*)66
 #define IO_BYTES_RECEIVED_CONTEXT (void*)77
@@ -83,6 +86,8 @@ static void reset_callback_context_records()
     on_io_send_complete_call_count = 0;
     on_io_send_complete_context_ok = false;
     on_io_send_complete_result = -1;
+    on_bytes_received_call_count = 0;
+    on_bytes_received_context_ok = false;
 }
 
 /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_004: [ The tlsio_openssl_compact shall call the callbacks functions defined in the xio.h ]*/
@@ -123,6 +128,16 @@ static void on_io_close_complete(void* context)
 /* Tests_SRS_SRS_TLSIO_OPENSSL_COMPACT_30_006: [ The tlsio_openssl_compact shall return the status of all async operations using the callbacks. ]*/
 static void on_bytes_received(void* context, const unsigned char* buffer, size_t size)
 {
+    on_bytes_received_call_count++;
+    // There's no interesting tlsio behavior to test with
+    // varying message lengths, so we'll just use a tiny one.
+    //buffer[0] = 4;
+    //buffer[1] = 2;
+    //return 2;
+    on_bytes_received_context_ok = context == IO_BYTES_RECEIVED_CONTEXT;
+    ASSERT_ARE_EQUAL(int, 4, (int)buffer[0]);
+    ASSERT_ARE_EQUAL(int, 2, (int)buffer[1]);
+    ASSERT_ARE_EQUAL(int, 2, (int)size);
     context;
     buffer;
     size;
@@ -184,6 +199,19 @@ static void ASSERT_IO_CLOSE_CALLBACK(bool called)
     else
     {
         ASSERT_ARE_EQUAL_WITH_MSG(int, 0, on_io_close_call_count, "unexpected on_io_close_complete_callback");
+    }
+}
+
+static void ASSERT_BYTES_RECEIVED_CALLBACK(bool called)
+{
+    if (called)
+    {
+        ASSERT_ARE_EQUAL_WITH_MSG(int, 1, on_bytes_received_call_count, "bytes_received_callback count mismatch");
+        ASSERT_IS_TRUE_WITH_MSG(on_bytes_received_context_ok, "bytes_received_context not passed");
+    }
+    else
+    {
+        ASSERT_ARE_EQUAL_WITH_MSG(int, 0, on_bytes_received_call_count, "unexpected bytes_received_callback");
     }
 }
 
@@ -285,6 +313,7 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
         REGISTER_GLOBAL_MOCK_RETURNS(SSL_set_fd, 1, 0);
         REGISTER_GLOBAL_MOCK_HOOK(SSL_connect, my_SSL_connect);
         REGISTER_GLOBAL_MOCK_HOOK(SSL_write, my_SSL_write);
+        REGISTER_GLOBAL_MOCK_HOOK(SSL_read, my_SSL_read);
 
         /**
          * Or you can combine, for example, in the success case malloc will call my_gballoc_malloc, and for
@@ -410,6 +439,7 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
             {
             case TP_SEND_NULL_BUFFER_FAIL:
             case TP_SEND_NULL_TLSIO_FAIL:
+            case TP_Send_zero_bytes_OK:
                 // No expected call preparation needed here
                 break;
             case TP_SSL_write_FAIL:
@@ -417,6 +447,7 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
                 SSL_WRITE_ERROR_PREPARE_SEQUENCE(SSL_WRITE_FAIL_ERROR_SEQUENCE);
                 break;
             case TP_SSL_write_OK:
+            case TP_Send_no_callback_OK:
                 expect_ssl_write = true;
                 SSL_WRITE_ERROR_PREPARE_SEQUENCE(SSL_WRITE_OK_ERROR_SEQUENCE);
                 break;
@@ -437,6 +468,18 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
                 NO_FAIL_TEST_POINT(TP_SSL_write_FAIL, SSL_write(SSL_Good_Ptr, (SSL_send_buffer + 16), 4));
                 NO_FAIL_TEST_POINT(TP_SSL_write_FAIL, SSL_write(SSL_Good_Ptr, (SSL_send_buffer + 16), 4));
             }
+
+            // The Read tests for tlsio is in the Open state
+            switch (test_point)
+            {
+            case TP_SSL_read_NULL_TLSIO_FAIL:
+                NO_FAIL_TEST_POINT(TP_SSL_read_OK, SSL_read(NULL, IGNORED_PTR_ARG, IGNORED_NUM_ARG));
+                break;
+            case TP_SSL_read_OK:
+                NO_FAIL_TEST_POINT(TP_SSL_read_OK, SSL_read(SSL_Good_Ptr, IGNORED_PTR_ARG, IGNORED_NUM_ARG));
+                break;
+            }
+
 
 
             // Close SSL Connection Members
@@ -554,7 +597,7 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
 
                 /////////////////////////////////////////////////////////////////////////////////////////////////////
                 // Send
-                if (test_point >= TP_SEND_NULL_BUFFER_FAIL && test_point <= TP_SSL_write_OK)
+                if (test_point >= TP_SEND_NULL_BUFFER_FAIL && test_point <= TP_Send_zero_bytes_OK)
                 {
                     ACTIVATE_SSL_WRITE_ERROR_SEQUENCE();
                     reset_callback_context_records();
@@ -595,7 +638,24 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
                 /////////////////////////////////////////////////////////////////////////////////////////////////////
 
                 /////////////////////////////////////////////////////////////////////////////////////////////////////
+                // Do work here
+                if (test_point == TP_SSL_read_NULL_TLSIO_FAIL || test_point == TP_SSL_read_OK)
+                {
+                    reset_callback_context_records();
+                    /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_048: [ If the tlsio_handle parameter is NULL, tlsio_openssl_compact_dowork shall do nothing except log an error and return FAILURE. ]*/
+                    CONCRETE_IO_HANDLE tlsio_for_do_work = test_point == TP_SSL_read_NULL_TLSIO_FAIL ? 0 : tlsio;
+                    tlsio_id->concrete_io_dowork(tlsio_for_do_work);
+                    /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_006: [ The tlsio_openssl_compact shall return the status of all async operations using the callbacks. ]*/
+                    /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_049: [ If the ssl client is able to provide received data, the tlsio_openssl_compact_dowork shall read this data and call on_bytes_received with the pointer to the buffer containing the data and the number of bytes received. ]*/
+                    /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_050: [ When tlsio_openssl_compact_dowork calls on_bytes_received, it shall pass the on_bytes_received_context handle as a parameter. ]*/
+                    ASSERT_BYTES_RECEIVED_CALLBACK(test_point == TP_SSL_read_OK);
+                }
+                // End do work
+                /////////////////////////////////////////////////////////////////////////////////////////////////////
+
+                /////////////////////////////////////////////////////////////////////////////////////////////////////
                 // Close here
+                // Avoid extra closes when a prior test point has already provoked a close
                 bool close_already_called = false;
                 switch (test_point)
                 {
@@ -606,14 +666,12 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
                     break;
                 }
 
-                if (test_point == TP_Close_NULL_TLSIO_FAIL)
+                // The main close call is used by the main test sequence, so it's easier to put
+                // these little odd extra close calls here.
+                if (test_point == TP_Close_NULL_TLSIO_FAIL || test_point == TP_Close_when_closed)
                 {
-                    tlsio_id->concrete_io_close(NULL, NULL, NULL);
-                }
-
-                if (test_point == TP_Close_when_closed)
-                {
-                    tlsio_id->concrete_io_close(tlsio, NULL, NULL);
+                    CONCRETE_IO_HANDLE tlsio_for_close = test_point == TP_Close_NULL_TLSIO_FAIL ? NULL : tlsio;
+                    tlsio_id->concrete_io_close(tlsio_for_close, NULL, NULL);
                 }
 
                 if (!close_already_called)

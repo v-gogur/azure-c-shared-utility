@@ -505,10 +505,12 @@ int tlsio_openssl_send(CONCRETE_IO_HANDLE tls_io, const void* buffer, size_t siz
 /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_004: [ The tlsio_openssl_compact shall call the callbacks functions defined in the xio.h ]*/
 void tlsio_openssl_dowork(CONCRETE_IO_HANDLE tls_io)
 {
+    /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_048: [ If the tlsio_handle parameter is NULL, tlsio_openssl_compact_dowork shall do nothing except log an error and return FAILURE. ]*/
     ASSIGN_AND_CHECK_TLSIO_INSTANCE
     {
         if (tls_io_instance->tlsio_state == TLSIO_STATE_OPEN)
         {
+            /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_051: [ The tlsio_openssl_compact_dowork shall use a stack-based buffer to store the data received from the ssl client. ]*/
             unsigned char buffer[64];
             int rcv_bytes;
 
@@ -519,15 +521,9 @@ void tlsio_openssl_dowork(CONCRETE_IO_HANDLE tls_io)
                 // tls_io_instance->on_bytes_received was already checked for NULL
                 // in the call to tlsio_openssl_open
                 /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_006: [ The tlsio_openssl_compact shall return the status of all async operations using the callbacks. ]*/
+                /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_049: [ If the ssl client is able to provide received data, the tlsio_openssl_compact_dowork shall read this data and call on_bytes_received with the pointer to the buffer containing the data and the number of bytes received. ]*/
+                /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_050: [ When tlsio_openssl_compact_dowork calls on_bytes_received, it shall pass the on_bytes_received_context handle as a parameter. ]*/
                 tls_io_instance->on_bytes_received(tls_io_instance->on_bytes_received_context, buffer, rcv_bytes);
-            }
-        }
-        else if (tls_io_instance->tlsio_state == TLSIO_STATE_NOT_OPEN)
-        {
-            LogError("tlsio_openssl_dowork has been called with no prior successful open call.");
-            if (tls_io_instance->on_io_error)
-            {
-                tls_io_instance->on_io_error(tls_io_instance->on_io_error_context);
             }
         }
     }
