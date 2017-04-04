@@ -151,6 +151,8 @@ int tlsio_openssl_compact_open(
 
 **SRS_TLSIO_OPENSSL_COMPACT_30_020: [** If the on_bytes_received parameter is NULL, `tlsio_openssl_compact_open` shall log an error and return _FAILURE_. **]**
 
+**SRS_TLSIO_OPENSSL_COMPACT_30_052: [** If the on_io_error parameter is NULL, `tlsio_openssl_compact_open` shall log an error and return _FAILURE_. **]**
+
 **SRS_TLSIO_OPENSSL_COMPACT_30_021: [** The `tlsio_openssl_compact_open` shall open the ssl connection with the host provided in the `tlsio_openssl_compact_create`. **]**
 
 **SRS_TLSIO_OPENSSL_COMPACT_30_022: [** The `tlsio_openssl_compact_open` shall store the provided `on_bytes_received` callback function address. **]**
@@ -243,8 +245,13 @@ Implementation of `IO_SETOPTION concrete_io_setoption`
 ```c
 int tlsio_openssl_compact_setoption(CONCRETE_IO_HANDLE tlsio_handle, const char* optionName, const void* value);
 ```
+**SRS_TLSIO_OPENSSL_COMPACT_30_053: [** If the `tlsio_handle` parameter is NULL, `tlsio_openssl_compact_setoption` shall do nothing except log an error and return _FAILURE_. **]**
 
-**SRS_TLSIO_OPENSSL_COMPACT_30_052 [** The `tlsio_openssl_compact_setoption` shall do nothing and return 0. **]**
+**SRS_TLSIO_OPENSSL_COMPACT_30_054: [** If the `optionName` parameter is NULL, `tlsio_openssl_compact_setoption` shall do nothing except log an error and return _FAILURE_. **]**
+
+**SRS_TLSIO_OPENSSL_COMPACT_30_055: [** If the `value` parameter is NULL, `tlsio_openssl_compact_setoption` shall do nothing except log an error and return _FAILURE_. **]**
+
+**SRS_TLSIO_OPENSSL_COMPACT_30_056 [** The `tlsio_openssl_compact_setoption` shall do nothing and return 0. **]**
 
 
 ###   tlsio_openssl_compact_retrieveoptions
@@ -253,4 +260,6 @@ Implementation of `IO_RETRIEVEOPTIONS concrete_io_retrieveoptions`
 OPTIONHANDLER_HANDLE tlsio_openssl_compact_retrieveoptions(CONCRETE_IO_HANDLE tlsio_handle);
 ```
 
-**SRS_TLSIO_OPENSSL_COMPACT_30_053: [** The `tlsio_openssl_compact_retrieveoptions` shall do nothing and return NULL. **]**
+**SRS_TLSIO_OPENSSL_COMPACT_30_057: [** If the `tlsio_handle` parameter is NULL, `tlsio_openssl_compact_retrieveoptions` shall do nothing except log an error and return _FAILURE_. **]**
+
+**SRS_TLSIO_OPENSSL_COMPACT_30_058: [** The `tlsio_openssl_compact_retrieveoptions` shall do nothing and return NULL. **]**

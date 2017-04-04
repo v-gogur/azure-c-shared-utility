@@ -22,6 +22,7 @@ enum
     // Open
     TP_OPEN_NULL_TLSIO_FAIL,	// tlsio_openssl_open with null tlsio
     TP_OPEN_NULL_BYTES_R_FAIL,	// tlsio_openssl_open with null on_bytes_received
+    TP_OPEN_NULL_ON_ERROR_FAIL,	// tlsio_openssl_open with null on_io_error
     TP_SOCKET_OPEN_FAIL,	    // creation of the TLS socket fails
     TP_SSL_CTX_new_FAIL,	    // SSL_CTX_new fails
     TP_SSL_new_FAIL,		    // SSL_new fails
@@ -32,7 +33,15 @@ enum
     TP_SSL_connect_1_OK,	    // SSL_connect fails with success sequence 1
     TP_Open_no_callback_OK,	    // Open succeeded but no on_open callback privided
     TP_Open_while_still_open_FAIL,	// Open called while still open
+#if(0)
+    // Set options
+    TP_SET_OPTION_NULL_TLSIO_FAIL,  // supplying a null tlsio to set_option
+    TP_SET_OPTION_NULL_OPT_NAME_FAIL,   // supplying a null option name to set_option
+    TP_SET_OPTION_NULL_OPT_VALUE_FAIL,  // supplying a null option name to set_option
 
+    // Retrieve options
+    TP_GET_OPTION_NULL_TLSIO_FAIL,  // supplying a null tlsio to retrieve_options
+#endif
     // Send
     TP_SEND_NULL_BUFFER_FAIL,	// Send with no read buffer
     TP_SEND_NULL_TLSIO_FAIL,    // Send with null tlsio
@@ -75,6 +84,7 @@ static X test_point_names[] =
     // Open
     TEST_POINT_NAME(TP_OPEN_NULL_TLSIO_FAIL)
     TEST_POINT_NAME(TP_OPEN_NULL_BYTES_R_FAIL)
+    TEST_POINT_NAME(TP_OPEN_NULL_ON_ERROR_FAIL)
     TEST_POINT_NAME(TP_SOCKET_OPEN_FAIL)
     TEST_POINT_NAME(TP_SSL_CTX_new_FAIL)
     TEST_POINT_NAME(TP_SSL_new_FAIL)
@@ -85,7 +95,15 @@ static X test_point_names[] =
     TEST_POINT_NAME(TP_SSL_connect_1_OK)
     TEST_POINT_NAME(TP_Open_no_callback_OK)
     TEST_POINT_NAME(TP_Open_while_still_open_FAIL)
+#if(0)
+    // Set options
+    TEST_POINT_NAME(TP_SET_OPTION_NULL_TLSIO_FAIL)
+    TEST_POINT_NAME(TP_SET_OPTION_NULL_OPT_NAME_FAIL)
+    TEST_POINT_NAME(TP_SET_OPTION_NULL_OPT_VALUE_FAIL)
 
+    // Retrieve options
+    TEST_POINT_NAME(TP_GET_OPTION_NULL_TLSIO_FAIL)
+#endif
     // Send
     TEST_POINT_NAME(TP_SEND_NULL_BUFFER_FAIL)
     TEST_POINT_NAME(TP_SEND_NULL_TLSIO_FAIL)
