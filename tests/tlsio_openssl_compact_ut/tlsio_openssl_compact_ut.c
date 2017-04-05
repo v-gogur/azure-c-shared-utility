@@ -74,6 +74,7 @@ static void my_gballoc_free(void* ptr)
 #include "callbacks.h"
 #include "ssl_errors.h"
 #include "test_points.h"
+#include "tlsio_internals.h"
 
  /**
   * You can create some global variables that your test will need in some way.
@@ -421,6 +422,7 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
 
             if (tlsio)
             {
+                ASSERT_TLSIO_NEWLY_CREATED(tlsio);
                 /////////////////////////////////////////////////////////////////////////////////////////////////////
                 // The Set Option test points
                 //      TP_SET_OPTION_NULL_TLSIO_FAIL
@@ -504,6 +506,7 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
                 if (test_point >= TP_SSL_connect_0_OK)
                 {
                     // Here the open succeeded
+                    ASSERT_TLSIO_OPEN(tlsio);
                     /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_026: [ If tlsio_openssl_compact_open successfully opens the ssl connection, it shall return 0. ]*/
                     /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_019: [ If the tlsio_handle parameter is NULL, tlsio_openssl_compact_open shall do nothing except log an error and return FAILURE. ]*/
                     /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_020: [ If the on_bytes_received parameter is NULL, tlsio_openssl_compact_open shall log an error and return FAILURE. ]*/
@@ -520,6 +523,7 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
                 else
                 {
                     // Here the open failed
+                    ASSERT_TLSIO_NOT_OPEN(tlsio);
                     /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_020: [ If the on_bytes_received parameter is NULL, tlsio_openssl_compact_open shall log an error and return FAILURE. ]*/
                     /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_030: [ If tlsio_openssl_compact_open fails to open the ssl connection, it shall return FAILURE. ] */
                     ASSERT_ARE_NOT_EQUAL_WITH_MSG(int, 0, open_result, "Unexpected concrete_io_open success return");
@@ -534,6 +538,7 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
                 }
 
                 // Open while still open
+                /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_029: [ If either tlsio_openssl_compact_create or tlsio_openssl_compact_close have not been called immediately prior to tlsio_openssl_compact_open, then tlsio_openssl_compact_open shall return FAILURE. ]*/
                 if (test_point == TP_Open_while_still_open_FAIL)
                 {
                     reset_callback_context_records();

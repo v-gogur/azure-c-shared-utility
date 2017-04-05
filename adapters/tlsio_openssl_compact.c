@@ -15,6 +15,7 @@
 #include "azure_c_shared_utility/threadapi.h"
 #include "azure_c_shared_utility/ssl_socket.h"
 
+
 #define CONNECT_RETRY_DELAY_MILLISECONDS 1000
 #define SEND_RETRY_DELAY_MILLISECONDS 5
 
@@ -93,15 +94,21 @@ static void internal_close(TLS_IO_INSTANCE* tls_io_instance)
         tls_io_instance->sock = -1;
     }
 
+    tls_io_instance->on_bytes_received = NULL;
+    tls_io_instance->on_io_error = NULL;
+    tls_io_instance->on_bytes_received_context = NULL;
+    tls_io_instance->on_io_error_context = NULL;
     tls_io_instance->tlsio_state = TLSIO_STATE_NOT_OPEN;
 }
 
 static void internal_close_with_stored_error_callback(TLS_IO_INSTANCE* tls_io_instance)
 {
+    ON_IO_ERROR callback = tls_io_instance->on_io_error;
+    void* context = tls_io_instance->on_io_error_context;
     internal_close(tls_io_instance);
-    if (tls_io_instance->on_io_error != NULL)
+    if (callback != NULL)
     {
-        tls_io_instance->on_io_error(tls_io_instance->on_io_error_context);
+        callback(context);
     }
 }
 
@@ -210,7 +217,6 @@ static int create_and_connect_ssl(TLS_IO_INSTANCE* tls_io_instance)
                                 // Connect failed, so delete the connection objects
                                 result = __FAILURE__;
                                 done = true;
-                                internal_close(tls_io_instance);
                                 LogInfo("Hard error from SSL_connect: %d", hard_error);
                             }
                         }
@@ -261,27 +267,13 @@ CONCRETE_IO_HANDLE tlsio_openssl_create(void* io_create_parameters)
             }
             else
             {
+                /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_011: [ The tlsio_openssl_compact_create shall initialize all internal callback pointers as NULL. ]*/
                 memset(result, 0, sizeof(TLS_IO_INSTANCE));
                 result->struct_size = sizeof(TLS_IO_INSTANCE);
                 result->host_address = ipV4;
                 result->port = tls_io_config->port;
-
-                result->sock = SSL_SOCKET_NULL_SOCKET;
-
-                result->ssl_context = NULL;
-                result->ssl = NULL;
-
-                /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_011: [ The tlsio_openssl_compact_create shall initialize all internal callback pointers as NULL. ]*/
-                result->on_bytes_received = NULL;
-                result->on_bytes_received_context = NULL;
-                result->on_io_error = NULL;
-                result->on_io_error_context = NULL;
-
                 result->tlsio_state = TLSIO_STATE_NOT_OPEN;
-
-                result->certificate = NULL;
-                result->x509certificate = NULL;
-                result->x509privatekey = NULL;
+                result->sock = SSL_SOCKET_NULL_SOCKET;
             }
         }
     }
