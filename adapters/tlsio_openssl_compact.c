@@ -99,11 +99,10 @@ static void internal_close(TLS_IO_INSTANCE* tls_io_instance)
 static void internal_close_with_stored_error_callback(TLS_IO_INSTANCE* tls_io_instance)
 {
     internal_close(tls_io_instance);
-    // The storage of tls_io_instance->on_io_error is guaranteed by
-    /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_052: [ If the on_io_error parameter is NULL, tlsio_openssl_compact_open shall log an error and return FAILURE. ]*/
-    // and the unit tests guarantee that it doesn't accidentally get set to NULL anywhere, so
-    // there's no need to test tls_io_instance->on_io_error for NULL before using it.
-    tls_io_instance->on_io_error(tls_io_instance->on_io_error_context);
+    if (tls_io_instance->on_io_error != NULL)
+    {
+        tls_io_instance->on_io_error(tls_io_instance->on_io_error_context);
+    }
 }
 
 // This method tests for hard errors returned from either SSL_write or SSL_connect.
@@ -201,6 +200,7 @@ static int create_and_connect_ssl(TLS_IO_INSTANCE* tls_io_instance)
                             // Connect succeeded
                             done = true;
                             result = 0;
+                            tls_io_instance->tlsio_state = TLSIO_STATE_OPEN;
                         }
                         else
                         {
@@ -343,10 +343,20 @@ int tlsio_openssl_open(CONCRETE_IO_HANDLE tls_io,
     }
     else
     {
+        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_022: [ The tlsio_openssl_compact_open shall store the provided on_bytes_received callback function address. ]*/
+        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_023: [ The tlsio_openssl_compact_open shall store the provided on_bytes_received_context handle. ]*/
+        tls_io_instance->on_bytes_received = on_bytes_received;
+        tls_io_instance->on_bytes_received_context = on_bytes_received_context;
+
+        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_024: [ The tlsio_openssl_compact_open shall store the provided on_io_error callback function address. ]*/
+        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_025: [ The tlsio_openssl_compact_open shall store the provided on_io_error_context handle. ]*/
+        tls_io_instance->on_io_error = on_io_error;
+        tls_io_instance->on_io_error_context = on_io_error_context;
+
         if (on_bytes_received == NULL)
         {
             /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_052: [ If the on_io_error parameter is NULL, tlsio_openssl_compact_open shall log an error and return FAILURE. ]*/
-            LogError("Required non-NULL parameter on_bytes_received is NULL");
+            LogError("Required parameter on_bytes_received is NULL");
             result = __FAILURE__;
         }
         else
@@ -354,7 +364,7 @@ int tlsio_openssl_open(CONCRETE_IO_HANDLE tls_io,
             if (on_io_error == NULL)
             {
                 /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_020: [ If the on_bytes_received parameter is NULL, tlsio_openssl_compact_open shall log an error and return FAILURE. ]*/
-                LogError("Required non-NULL parameter on_io_error is NULL");
+                LogError("Required parameter on_io_error is NULL");
                 result = __FAILURE__;
             }
             else
@@ -367,33 +377,25 @@ int tlsio_openssl_open(CONCRETE_IO_HANDLE tls_io,
                 }
                 else
                 {
-                    /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_022: [ The tlsio_openssl_compact_open shall store the provided on_bytes_received callback function address. ]*/
-                    /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_023: [ The tlsio_openssl_compact_open shall store the provided on_bytes_received_context handle. ]*/
-                    tls_io_instance->on_bytes_received = on_bytes_received;
-                    tls_io_instance->on_bytes_received_context = on_bytes_received_context;
-
-                    /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_024: [ The tlsio_openssl_compact_open shall store the provided on_io_error callback function address. ]*/
-                    /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_025: [ The tlsio_openssl_compact_open shall store the provided on_io_error_context handle. ]*/
-                    tls_io_instance->on_io_error = on_io_error;
-                    tls_io_instance->on_io_error_context = on_io_error_context;
-
-                    if (create_and_connect_ssl(tls_io_instance) != 0)
-                    {
-                        result = __FAILURE__;
-                    }
-                    else
-                    {
-                        tls_io_instance->tlsio_state = TLSIO_STATE_OPEN;
-                        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_026: [ If tlsio_openssl_compact_open successfully opens the ssl connection, it shall return 0. ]*/
-                        result = 0;
-                    }
+                    /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_026: [ If tlsio_openssl_compact_open successfully opens the ssl connection, it shall return 0. ]*/
+                    result = create_and_connect_ssl(tls_io_instance);
                 }
             }
         }
         if (result != 0)
         {
             /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_032: [ If the tlsio_openssl_compact_open fails to open the tls connection, and the on_io_error callback was provided, it shall call on_io_error and pass in the provided on_io_error_context. ]*/
-            internal_close_with_stored_error_callback(tls_io_instance);
+            if (tls_io_instance != NULL)
+            {
+                internal_close_with_stored_error_callback(tls_io_instance);
+            }
+            else
+            {
+                if (on_io_error != NULL)
+                {
+                    on_io_error(on_io_error_context);
+                }
+            }
         }
     }
 

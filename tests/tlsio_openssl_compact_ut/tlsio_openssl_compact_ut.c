@@ -250,28 +250,35 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
             TEST_POINT(TP_SSL_set_fd_FAIL, SSL_set_fd(SSL_Good_Ptr, SSL_Good_Socket));
 
             // SSL_connect can succeed and fail in several different sequences
-            switch (test_point)
+            if (test_point < TP_SSL_connect_0_FAIL)
             {
-            case TP_SSL_connect_0_FAIL:
-                PREPARE_ERROR_SEQUENCE_FOR_SSL_CONNECT(SSL_CONNECT_FAIL_ERROR_SEQUENCE_0);
-                NO_FAIL_TEST_POINT(TP_SSL_connect_0_FAIL, SSL_connect(SSL_Good_Ptr));
-                break;
-            case TP_SSL_connect_1_FAIL:
-                PREPARE_ERROR_SEQUENCE_FOR_SSL_CONNECT(SSL_CONNECT_FAIL_ERROR_SEQUENCE_1);
-                NO_FAIL_TEST_POINT(TP_SSL_connect_1_FAIL, SSL_connect(SSL_Good_Ptr));
-                NO_FAIL_TEST_POINT(TP_SSL_connect_1_FAIL, SSL_connect(SSL_Good_Ptr));
-                NO_FAIL_TEST_POINT(TP_SSL_connect_1_FAIL, SSL_connect(SSL_Good_Ptr));
-                break;
-            case TP_SSL_connect_0_OK:
-                PREPARE_ERROR_SEQUENCE_FOR_SSL_CONNECT(SSL_CONNECT_OK_ERROR_SEQUENCE_0);
-                NO_FAIL_TEST_POINT(TP_SSL_connect_0_OK, SSL_connect(SSL_Good_Ptr));
-                break;
-            default:
-                PREPARE_ERROR_SEQUENCE_FOR_SSL_CONNECT(SSL_CONNECT_OK_ERROR_SEQUENCE_1);
-                NO_FAIL_TEST_POINT(TP_SSL_connect_1_OK, SSL_connect(SSL_Good_Ptr));
-                NO_FAIL_TEST_POINT(TP_SSL_connect_1_OK, SSL_connect(SSL_Good_Ptr));
-                NO_FAIL_TEST_POINT(TP_SSL_connect_1_OK, SSL_connect(SSL_Good_Ptr));
-                break;
+                PREPARE_ERROR_SEQUENCE_FOR_UNCALLED_SSL_CONNECT();
+            }
+            else
+            {
+                switch (test_point)
+                {
+                case TP_SSL_connect_0_FAIL:
+                    PREPARE_ERROR_SEQUENCE_FOR_SSL_CONNECT(SSL_CONNECT_FAIL_ERROR_SEQUENCE_0);
+                    NO_FAIL_TEST_POINT(TP_SSL_connect_0_FAIL, SSL_connect(SSL_Good_Ptr));
+                    break;
+                case TP_SSL_connect_1_FAIL:
+                    PREPARE_ERROR_SEQUENCE_FOR_SSL_CONNECT(SSL_CONNECT_FAIL_ERROR_SEQUENCE_1);
+                    NO_FAIL_TEST_POINT(TP_SSL_connect_1_FAIL, SSL_connect(SSL_Good_Ptr));
+                    NO_FAIL_TEST_POINT(TP_SSL_connect_1_FAIL, SSL_connect(SSL_Good_Ptr));
+                    NO_FAIL_TEST_POINT(TP_SSL_connect_1_FAIL, SSL_connect(SSL_Good_Ptr));
+                    break;
+                case TP_SSL_connect_0_OK:
+                    PREPARE_ERROR_SEQUENCE_FOR_SSL_CONNECT(SSL_CONNECT_OK_ERROR_SEQUENCE_0);
+                    NO_FAIL_TEST_POINT(TP_SSL_connect_0_OK, SSL_connect(SSL_Good_Ptr));
+                    break;
+                default:
+                    PREPARE_ERROR_SEQUENCE_FOR_SSL_CONNECT(SSL_CONNECT_OK_ERROR_SEQUENCE_1);
+                    NO_FAIL_TEST_POINT(TP_SSL_connect_1_OK, SSL_connect(SSL_Good_Ptr));
+                    NO_FAIL_TEST_POINT(TP_SSL_connect_1_OK, SSL_connect(SSL_Good_Ptr));
+                    NO_FAIL_TEST_POINT(TP_SSL_connect_1_OK, SSL_connect(SSL_Good_Ptr));
+                    break;
+                }
             }
 
             // At this point all of the failed open calls have been done, and our adapter is now 
@@ -414,7 +421,6 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
 
             if (tlsio)
             {
-#if(0)
                 /////////////////////////////////////////////////////////////////////////////////////////////////////
                 // The Set Option test points
                 //      TP_SET_OPTION_NULL_TLSIO_FAIL
@@ -457,7 +463,6 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
                 ASSERT_IS_NULL_WITH_MSG(retrieve_option_result, "Unexpected result from concrete_io_retrieveoptions");
                 // end options
                 /////////////////////////////////////////////////////////////////////////////////////////////////////
-#endif
 
 
                 /////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -486,7 +491,7 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
                 ON_BYTES_RECEIVED on_bytes_received_for_open = test_point == TP_OPEN_NULL_BYTES_R_FAIL ? NULL : on_bytes_received;
 
                 /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_052: [ If the on_io_error parameter is NULL, tlsio_openssl_compact_open shall log an error and return FAILURE. ]*/
-                ON_IO_ERROR on_io_error_for_open = test_point == TP_OPEN_NULL_BYTES_R_FAIL ? NULL : on_io_error;
+                ON_IO_ERROR on_io_error_for_open = test_point == TP_OPEN_NULL_ON_ERROR_FAIL ? NULL : on_io_error;
 
                 /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_007: [ If the callback function is set as NULL. The tlsio_openssl_compact shall not call anything. ]*/
                 ON_IO_OPEN_COMPLETE open_callback = test_point == TP_Open_no_callback_OK ?  NULL : on_io_open_complete;
@@ -503,7 +508,7 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
                     /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_019: [ If the tlsio_handle parameter is NULL, tlsio_openssl_compact_open shall do nothing except log an error and return FAILURE. ]*/
                     /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_020: [ If the on_bytes_received parameter is NULL, tlsio_openssl_compact_open shall log an error and return FAILURE. ]*/
                     /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_052: [ If the on_io_error parameter is NULL, tlsio_openssl_compact_open shall log an error and return FAILURE. ]*/
-                    ASSERT_ARE_EQUAL_WITH_MSG(int, 0, open_result, "Unexpected concrete_io_open failure");
+                    ASSERT_ARE_EQUAL_WITH_MSG(int, 0, open_result, "Unexpected concrete_io_open failure return");
                     ASSERT_IO_ERROR_CALLBACK(false);
 
                     /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_002: [ The tlsio_openssl_compact shall report the open operation status using the IO_OPEN_RESULT enumerator defined in the xio.h ]*/
@@ -517,10 +522,10 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
                     // Here the open failed
                     /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_020: [ If the on_bytes_received parameter is NULL, tlsio_openssl_compact_open shall log an error and return FAILURE. ]*/
                     /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_030: [ If tlsio_openssl_compact_open fails to open the ssl connection, it shall return FAILURE. ] */
-                    ASSERT_ARE_NOT_EQUAL_WITH_MSG(int, 0, open_result, "Unexpected concrete_io_open success");
+                    ASSERT_ARE_NOT_EQUAL_WITH_MSG(int, 0, open_result, "Unexpected concrete_io_open success return");
 
                     /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_032: [ If the tlsio_openssl_compact_open fails to open the tls connection, and the on_io_error callback was provided, it shall call on_io_error and pass in the provided on_io_error_context. ]*/
-                    bool expected_io_error_callback = test_point != TP_OPEN_NULL_TLSIO_FAIL ? true : false;
+                    bool expected_io_error_callback = (test_point == TP_OPEN_NULL_TLSIO_FAIL || test_point == TP_OPEN_NULL_ON_ERROR_FAIL) ? false : true;
                     ASSERT_IO_ERROR_CALLBACK(expected_io_error_callback);
 
                     /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_002: [ The tlsio_openssl_compact shall report the open operation status using the IO_OPEN_RESULT enumerator defined in the xio.h ]*/

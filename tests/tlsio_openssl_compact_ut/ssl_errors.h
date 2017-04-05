@@ -157,6 +157,13 @@ void ASSERT_SSL_WRITE_ERROR_SEQUENCE()
     seq->size = sizeof(s ## _impl) / sizeof(SSL_error_pair);		\
     break
 
+void PREPARE_ERROR_SEQUENCE_FOR_UNCALLED_SSL_CONNECT()
+{
+    SSL_error_sequence* seq = &SSL_connect_error_sequence;
+    seq->sequence = NULL;
+    seq->size = 0;
+}
+
 void PREPARE_ERROR_SEQUENCE_FOR_SSL_CONNECT(int sequence)
 {
     // The initial state must be correct also

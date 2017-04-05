@@ -147,7 +147,7 @@ int tlsio_openssl_compact_open(
     void* on_io_error_context);
 ```
 
-**SRS_TLSIO_OPENSSL_COMPACT_30_019: [** If the `tlsio_handle` parameter is NULL, `tlsio_openssl_compact_open` shall do nothing except log an error and return _FAILURE_. **]**
+**SRS_TLSIO_OPENSSL_COMPACT_30_019: [** If the `tlsio_handle` parameter is NULL, `tlsio_openssl_compact_open` shall log an error and return _FAILURE_. **]**
 
 **SRS_TLSIO_OPENSSL_COMPACT_30_020: [** If the on_bytes_received parameter is NULL, `tlsio_openssl_compact_open` shall log an error and return _FAILURE_. **]**
 
