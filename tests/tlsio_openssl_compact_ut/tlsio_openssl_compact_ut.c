@@ -566,10 +566,10 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
                     ACTIVATE_SSL_WRITE_ERROR_SEQUENCE();
                     reset_callback_context_records();
 
-                    /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_046: [ If the buffer is NULL, the tlsio_openssl_compact_send shall do nothing except log the error and return FAILURE. ]*/
+                    /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_046: [ If the buffer is NULL, the tlsio_openssl_compact_send shall log the error and return FAILURE. ]*/
                     uint8_t* buffer = test_point == TP_SEND_NULL_BUFFER_FAIL ? NULL : SSL_send_buffer;
 
-                    /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_047: [ If the size is 0, the tlsio_openssl_compact_send shall do nothing and return 0. ]*/
+                    /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_047: [ If the size is 0, the tlsio_openssl_compact_send shall shall call the on_send_complete with IO_SEND_OK and return 0. ]*/
                     size_t bytes_to_send = test_point == TP_Send_zero_bytes_OK ? 0 :20;	// 20 is 4 less than the buffer size
 
                     /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_039: [ If the tlsio_handle parameter is NULL, tlsio_openssl_compact_send shall log an error and return FAILURE. ] ]*/
@@ -577,6 +577,17 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
 
                     int send_result = tlsio_id->concrete_io_send(tlsio_for_send_call, 
                         buffer, bytes_to_send, on_io_send_complete, IO_SEND_COMPLETE_CONTEXT);
+
+                    if (test_point == TP_SSL_write_FAIL)
+                    {
+                        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_044: [ if the SSL_write call fails unexpectedly, the tlsio_openssl_compact_send shall enter the "Not Open" state, call the on_send_complete with IO_SEND_ERROR, and return FAILURE. ]*/
+                        ASSERT_TLSIO_NOT_OPEN(tlsio);
+                    }
+                    else
+                    {
+                        // Only TP_SSL_write_FAIL should force a close
+                        ASSERT_TLSIO_OPEN(tlsio);
+                    }
 
                     ASSERT_SSL_WRITE_ERROR_SEQUENCE();	// special checking for SSL_write
                     if (test_point >= TP_SSL_write_OK)
@@ -593,15 +604,14 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
                     else
                     {
                         // Failures here
-                        ASSERT_ARE_NOT_EQUAL_WITH_MSG(int, 0, send_result, "Unexpected concrete_io_send success");
-
                         bool expected_io_error_callback = 
                             (test_point == TP_SEND_NULL_TLSIO_FAIL || test_point == TP_SEND_NULL_BUFFER_FAIL) ? false : true;
                         ASSERT_IO_ERROR_CALLBACK(expected_io_error_callback);
 
+                        ASSERT_ARE_NOT_EQUAL_WITH_MSG(int, 0, send_result, "Unexpected concrete_io_send success");
+
                         /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_003: [ The tlsio_openssl_compact shall report the send operation status using the IO_SEND_RESULT enumerator defined in the xio.h ]*/
                         /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_041: [ The tlsio_openssl_compact_send shall call the provided on_send_complete callback function. ]*/
-                        /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_044: [ if the ssl fails before sending all of the bytes in the buffer, the tlsio_openssl_compact_send shall call the on_send_complete with IO_SEND_ERROR, and return FAILURE. ]*/
                         ASSERT_IO_SEND_CALLBACK(true, IO_SEND_ERROR);
                     }
                 }
@@ -655,7 +665,10 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
                     CONCRETE_IO_HANDLE tlsio_for_close = test_point == TP_Close_NULL_TLSIO_FAIL ? NULL : tlsio;
                     tlsio_id->concrete_io_close(tlsio_for_close, NULL, NULL);
                     /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_034: [ The tlsio_openssl_compact_close shall enter the "Not Open" state by forcibly closing any existing ssl connection. ] */
-                    ASSERT_TLSIO_NOT_OPEN(tlsio);
+                    if (test_point != TP_Close_NULL_TLSIO_FAIL)
+                    {
+                        ASSERT_TLSIO_NOT_OPEN(tlsio);
+                    }
                 }
 
                 // Some of the earlier test point sequences may have called close already or a lack of
