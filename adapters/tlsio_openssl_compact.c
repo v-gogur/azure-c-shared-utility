@@ -541,10 +541,6 @@ int tlsio_openssl_send(CONCRETE_IO_HANDLE tls_io, const void* buffer, size_t siz
 /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_004: [ The tlsio_openssl_compact shall call the callbacks functions defined in the xio.h ]*/
 void tlsio_openssl_dowork(CONCRETE_IO_HANDLE tls_io)
 {
-<<<<<<< HEAD
-    /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_048: [ If the tlsio_handle parameter is NULL, tlsio_openssl_compact_dowork shall do nothing except log an error. ]*/
-    ASSIGN_AND_CHECK_TLSIO_INSTANCE
-=======
     /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_048: [ If the tlsio_handle parameter is NULL, tlsio_openssl_compact_dowork shall do nothing except log an error and return FAILURE. ]*/
     TLS_IO_INSTANCE* tls_io_instance = (TLS_IO_INSTANCE*)tls_io;
     if (tls_io_instance == NULL)
@@ -552,7 +548,6 @@ void tlsio_openssl_dowork(CONCRETE_IO_HANDLE tls_io)
         LogError(null_tlsio_message);
     }
     else
->>>>>>> 3fff579ee4d172ae52857d569d4b2bb19aad6ba9
     {
         if (tls_io_instance->tlsio_state == TLSIO_STATE_OPEN)
         {
