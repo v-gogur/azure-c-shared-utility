@@ -40,25 +40,6 @@ typedef struct TLS_IO_INSTANCE_TAG
     int sock;
 } TLS_IO_INSTANCE;
 
-static void ASSERT_TLSIO_NEWLY_CREATED(CONCRETE_IO_HANDLE tlsio)
-{
-    TLS_IO_INSTANCE* tlsio_instance = (TLS_IO_INSTANCE*)tlsio;
-    // Assure ourselves that the struct defs are in sync
-    ASSERT_ARE_EQUAL_WITH_MSG(uint16_t, sizeof(TLS_IO_INSTANCE), tlsio_instance->struct_size, "bad tlsio struct size");
-    ASSERT_ARE_EQUAL_WITH_MSG(int, 0, (int)tlsio_instance->on_bytes_received, "on_bytes_received should be NULL");
-    ASSERT_ARE_EQUAL_WITH_MSG(int, 0, (int)tlsio_instance->on_io_error, "on_io_error should be NULL");
-    ASSERT_ARE_EQUAL_WITH_MSG(int, 0, (int)tlsio_instance->on_bytes_received_context, "on_bytes_received_context should be NULL");
-    ASSERT_ARE_EQUAL_WITH_MSG(int, 0, (int)tlsio_instance->on_io_error_context, "on_io_error_context should be NULL");
-    ASSERT_ARE_EQUAL_WITH_MSG(int, 0, (int)tlsio_instance->ssl, "ssl should be NULL");
-    ASSERT_ARE_EQUAL_WITH_MSG(int, 0, (int)tlsio_instance->ssl_context, "ssl_context should be NULL");
-    ASSERT_ARE_EQUAL_WITH_MSG(int, TLSIO_STATE_NOT_OPEN, (int)tlsio_instance->tlsio_state, "tlsio_state should be 0");
-    ASSERT_ARE_EQUAL_WITH_MSG(int, SSL_goood_port_number, (int)tlsio_instance->port, "tlsio_state should be SSL_goood_port_number");
-    ASSERT_ARE_EQUAL(int, 0, (int)tlsio_instance->certificate);
-    ASSERT_ARE_EQUAL(int, 0, (int)tlsio_instance->x509certificate);
-    ASSERT_ARE_EQUAL(int, 0, (int)tlsio_instance->x509privatekey);
-    ASSERT_ARE_EQUAL_WITH_MSG(int, SSL_SOCKET_NULL_SOCKET, (int)tlsio_instance->sock, "sock should be SSL_SOCKET_NULL_SOCKET");
-}
-
 // Non-null options are okay; we don't delete them after a close because
 // the set options calls are conceptually part of create. 
 // Positive option behavior is not yet spec'd, and will get spec'd when x509
@@ -80,6 +61,15 @@ static void ASSERT_TLSIO_NOT_OPEN(CONCRETE_IO_HANDLE tlsio)
     //ASSERT_ARE_EQUAL(int, 0, (int)tlsio_instance->x509certificate);
     //ASSERT_ARE_EQUAL(int, 0, (int)tlsio_instance->x509privatekey);
     ASSERT_ARE_EQUAL_WITH_MSG(int, SSL_SOCKET_NULL_SOCKET, (int)tlsio_instance->sock, "sock should be SSL_SOCKET_NULL_SOCKET");
+}
+
+static void ASSERT_TLSIO_NEWLY_CREATED(CONCRETE_IO_HANDLE tlsio)
+{
+    TLS_IO_INSTANCE* tlsio_instance = (TLS_IO_INSTANCE*)tlsio;
+    ASSERT_TLSIO_NOT_OPEN(tlsio_instance);
+    ASSERT_ARE_EQUAL(int, 0, (int)tlsio_instance->certificate);
+    ASSERT_ARE_EQUAL(int, 0, (int)tlsio_instance->x509certificate);
+    ASSERT_ARE_EQUAL(int, 0, (int)tlsio_instance->x509privatekey);
 }
 
 static void ASSERT_TLSIO_OPEN(CONCRETE_IO_HANDLE tlsio)

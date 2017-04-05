@@ -83,6 +83,17 @@ typedef struct TLSIO_CONFIG_TAG
 ```
  **]**
 
+## Internal State
+The quoted internal states "Open" and "Not Open" discussed in this spec are implementation dependent, and are not exposed via the API. The `setoption` and `retrieveoptions` calls are not currently supported, so any state changes they might introduce are intentionally ignored in this document.
+
+"Open" refers to an internal state where the SSL connection is made and the `concrete_io_send` and `concrete_io_dowork` calls are expected to succeed.
+
+"Not Open" refers to an internal state where the SSL connection is not made, all internal connection resources have been released, and the `concrete_io_open` call is expected to succeed.
+
+**SRS_TLSIO_OPENSSL_COMPACT_30_070: [** After `concrete_io_create` has succeeded, tlsio_openssl_compact shall maintain its internal state in either "Open" or "Not Open" at all times until `concrete_io_destroy` is called. **]**
+
+**SRS_TLSIO_OPENSSL_COMPACT_30_071: [** Failures which indicate that the SSL connection can no longer be trusted shall cause the tlsio_openssl_compact to transition to the "Not Open" state. **]**
+
 
 ## Callbacks
 
@@ -106,7 +117,7 @@ Implementation of `IO_CREATE concrete_io_create`
 CONCRETE_IO_HANDLE tlsio_openssl_compact_create(void* io_create_parameters);
 ```
 
-**SRS_TLSIO_OPENSSL_COMPACT_30_009: [** The `tlsio_openssl_compact_create` shall allocate, initialize, and return an instance of the tlsio for compact OpenSSL. **]**
+**SRS_TLSIO_OPENSSL_COMPACT_30_009: [** The `tlsio_openssl_compact_create` shall allocate and initialize all necessary resources, enter the "Not Open" state, and return an instance of the tlsio for compact OpenSSL. **]**
 
 **SRS_TLSIO_OPENSSL_COMPACT_30_010: [** If the allocation fails, `tlsio_openssl_compact_create` shall return NULL. **]**
 
@@ -129,9 +140,9 @@ void tlsio_openssl_compact_destroy(CONCRETE_IO_HANDLE tlsio_handle);
 
 **SRS_TLSIO_OPENSSL_COMPACT_30_016: [** If `tlsio_handle` is NULL, `tlsio_openssl_compact_destroy` shall do nothing. **]**
 
-**SRS_TLSIO_OPENSSL_COMPACT_30_017: [** The `tlsio_openssl_compact_destroy` shall release tlsio_handle and all its associated resources. **]**
+**SRS_TLSIO_OPENSSL_COMPACT_30_017: [** The `tlsio_openssl_compact_destroy` shall enter the "Not Open" state if necessary and then release `tlsio_handle`. **]**
 
-**SRS_TLSIO_OPENSSL_COMPACT_30_018: [** If `tlsio_openssl_compact_close` has not been called immediately prior to `tlsio_openssl_compact_destroy`, the method shall release  tlsio_handle and all its associated resources and log an error. **]**
+**SRS_TLSIO_OPENSSL_COMPACT_30_018: [** If the adapter is in the "Open" state, concrete_io_destroy shall log an error. **]**
 
 
 ###   tlsio_openssl_compact_open
@@ -174,8 +185,6 @@ int tlsio_openssl_compact_open(
 **SRS_TLSIO_OPENSSL_COMPACT_30_030: [** If `tlsio_openssl_compact_open` fails to open the ssl connection, it shall return _FAILURE_. **]**
 
 **SRS_TLSIO_OPENSSL_COMPACT_30_031: [** If the `tlsio_openssl_compact_open` fails to open the tls connection, and the `on_io_open_complete` callback was provided, it shall call  `on_io_open_complete` with IO_OPEN_ERROR. **]**
-
-**SRS_TLSIO_OPENSSL_COMPACT_30_032: [** If the `tlsio_openssl_compact_open` fails to open the tls connection, and the `on_io_error` callback was provided, it shall call  `on_io_error` and pass in the provided `on_io_error_context`. **]**
 
 
 ###   tlsio_openssl_compact_close

@@ -6,6 +6,7 @@
 #else
 #include <stdlib.h>
 #endif
+#include <stdint.h>
 #include <stdbool.h>
 
 /**
@@ -503,6 +504,7 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
                     IO_BYTES_RECEIVED_CONTEXT, on_io_error_for_open, IO_ERROR_CONTEXT);
 
                 ASSERT_SSL_CONNECT_ERROR_SEQUENCE();	// special checking for SSL_connect
+                ASSERT_IO_ERROR_CALLBACK(false);
                 if (test_point >= TP_SSL_connect_0_OK)
                 {
                     // Here the open succeeded
@@ -512,7 +514,6 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
                     /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_020: [ If the on_bytes_received parameter is NULL, tlsio_openssl_compact_open shall log an error and return FAILURE. ]*/
                     /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_052: [ If the on_io_error parameter is NULL, tlsio_openssl_compact_open shall log an error and return FAILURE. ]*/
                     ASSERT_ARE_EQUAL_WITH_MSG(int, 0, open_result, "Unexpected concrete_io_open failure return");
-                    ASSERT_IO_ERROR_CALLBACK(false);
 
                     /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_002: [ The tlsio_openssl_compact shall report the open operation status using the IO_OPEN_RESULT enumerator defined in the xio.h ]*/
                     /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_007: [ If the callback function is set as NULL. The tlsio_openssl_compact shall not call anything. ]*/
@@ -528,23 +529,22 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
                     /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_030: [ If tlsio_openssl_compact_open fails to open the ssl connection, it shall return FAILURE. ] */
                     ASSERT_ARE_NOT_EQUAL_WITH_MSG(int, 0, open_result, "Unexpected concrete_io_open success return");
 
-                    /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_032: [ If the tlsio_openssl_compact_open fails to open the tls connection, and the on_io_error callback was provided, it shall call on_io_error and pass in the provided on_io_error_context. ]*/
-                    bool expected_io_error_callback = (test_point == TP_OPEN_NULL_TLSIO_FAIL || test_point == TP_OPEN_NULL_ON_ERROR_FAIL) ? false : true;
-                    ASSERT_IO_ERROR_CALLBACK(expected_io_error_callback);
-
                     /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_002: [ The tlsio_openssl_compact shall report the open operation status using the IO_OPEN_RESULT enumerator defined in the xio.h ]*/
                     /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_031: [ If the tlsio_openssl_compact_open fails to open the tls connection, and the on_io_open_complete callback was provided, it shall call on_io_open_complete with IO_OPEN_ERROR. ]*/
                     ASSERT_IO_OPEN_CALLBACK(true, IO_OPEN_ERROR);
                 }
 
                 // Open while still open
-                /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_029: [ If either tlsio_openssl_compact_create or tlsio_openssl_compact_close have not been called immediately prior to tlsio_openssl_compact_open, then tlsio_openssl_compact_open shall return FAILURE. ]*/
+                /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_029: [ If the adapter is in the "Open" state, it shall remain in the "Open" state and return FAILURE. ]*/
+                /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_031: [ If the tlsio_openssl_compact_open returns FAILURE and the on_io_open_complete callback was provided, it shall call on_io_open_complete with IO_OPEN_ERROR. ]*/
                 if (test_point == TP_Open_while_still_open_FAIL)
                 {
                     reset_callback_context_records();
                     int open_second_result = tlsio_id->concrete_io_open(tlsio_for_open_call, open_callback, IO_OPEN_COMPLETE_CONTEXT, on_bytes_received_for_open,
                         IO_BYTES_RECEIVED_CONTEXT, on_io_error, IO_ERROR_CONTEXT);
-                    open_second_result;
+                    ASSERT_TLSIO_OPEN(tlsio);
+                    ASSERT_ARE_NOT_EQUAL_WITH_MSG(int, 0, open_second_result, "Redundant open call should fail");
+                    ASSERT_IO_OPEN_CALLBACK(true, IO_OPEN_ERROR);
                 }
 
                 // End Open
@@ -571,7 +571,7 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
                     /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_047: [ If the size is 0, the tlsio_openssl_compact_send shall do nothing and return 0. ]*/
                     size_t bytes_to_send = test_point == TP_Send_zero_bytes_OK ? 0 :20;	// 20 is 4 less than the buffer size
 
-                    /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_039: [ If the tlsio_handle parameter is NULL, tlsio_openssl_compact_send shall do nothing except log an error and return FAILURE. ] ]*/
+                    /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_039: [ If the tlsio_handle parameter is NULL, tlsio_openssl_compact_send shall log an error and return FAILURE. ] ]*/
                     CONCRETE_IO_HANDLE tlsio_for_send_call = test_point == TP_SEND_NULL_TLSIO_FAIL ? 0 : tlsio;
 
                     int send_result = tlsio_id->concrete_io_send(tlsio_for_send_call, 
@@ -672,7 +672,7 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
                         }
                         else
                         {
-                            /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_036: [ If either tlsio_openssl_compact_close or tlsio_openssl_compact_create was called immediately prior to tlsio_openssl_compact_close, then tlsio_openssl_compact_close shall log an error and return FAILURE. ] */
+                            /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_036: [ If the adapter is in the "Not Open" state, then tlsio_openssl_compact_close shall log an error and return FAILURE. ] */
                             ASSERT_ARE_EQUAL_WITH_MSG(int, 0, close_return, "Unexpected close fail return value");
                         }
                         /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_037: [ If on_io_close_complete is provided, tlsio_openssl_compact_close shall call on_io_close_complete. ] */
