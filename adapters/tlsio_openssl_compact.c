@@ -41,8 +41,11 @@ typedef enum TLSIO_STATE_TAG
     TLSIO_STATE_OPEN,
 } TLSIO_STATE;
 
+// This structure definition is mirrored in the unit tests, so if you change
+// this struct, keep it in sync with the one in tlsio_openssl_compact_ut.c
 typedef struct TLS_IO_INSTANCE_TAG
 {
+    uint16_t struct_size;
     ON_BYTES_RECEIVED on_bytes_received;
     ON_IO_ERROR on_io_error;
     void* on_bytes_received_context;
@@ -76,6 +79,12 @@ static void internal_close(TLS_IO_INSTANCE* tls_io_instance)
     /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_034: [ The tlsio_openssl_compact_close shall always forcibly close any existing ssl connection. ] */
     if (tls_io_instance->tlsio_state == TLSIO_STATE_OPEN)
     {
+        // From the OpenSSL manual pages: "According to the TLS standard, it is acceptable 
+        // for an application to only send its shutdown alert and then close the 
+        // underlying connection without waiting for the peer's response...". It goes
+        // on to say that waiting for shutdown only makes sense if the underlying
+        // connection is being re-used, which we do not do. So there's no need
+        // to wait for shutdown.
         (void)SSL_shutdown(tls_io_instance->ssl);
     }
 
@@ -91,6 +100,8 @@ static void internal_close(TLS_IO_INSTANCE* tls_io_instance)
     }
     if (tls_io_instance->sock >= 0)
     {
+        // The underlying socke API does not support waiting for close
+        // to complete, so it isn't possible to do so.
         SSL_Socket_Close(tls_io_instance->sock);
         tls_io_instance->sock = -1;
     }
@@ -258,14 +269,14 @@ CONCRETE_IO_HANDLE tlsio_openssl_create(void* io_create_parameters)
             else
             {
                 memset(result, 0, sizeof(TLS_IO_INSTANCE));
+                result->struct_size = sizeof(TLS_IO_INSTANCE);
                 result->host_address = ipV4;
                 result->port = tls_io_config->port;
 
-                result->sock = -1;
+                result->sock = SSL_SOCKET_NULL_SOCKET;
 
                 result->ssl_context = NULL;
                 result->ssl = NULL;
-                result->certificate = NULL;
 
                 /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_011: [ The tlsio_openssl_compact_create shall initialize all internal callback pointers as NULL. ]*/
                 result->on_bytes_received = NULL;
@@ -275,6 +286,7 @@ CONCRETE_IO_HANDLE tlsio_openssl_create(void* io_create_parameters)
 
                 result->tlsio_state = TLSIO_STATE_NOT_OPEN;
 
+                result->certificate = NULL;
                 result->x509certificate = NULL;
                 result->x509privatekey = NULL;
             }
@@ -505,7 +517,7 @@ int tlsio_openssl_send(CONCRETE_IO_HANDLE tls_io, const void* buffer, size_t siz
 /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_004: [ The tlsio_openssl_compact shall call the callbacks functions defined in the xio.h ]*/
 void tlsio_openssl_dowork(CONCRETE_IO_HANDLE tls_io)
 {
-    /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_048: [ If the tlsio_handle parameter is NULL, tlsio_openssl_compact_dowork shall do nothing except log an error and return FAILURE. ]*/
+    /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_048: [ If the tlsio_handle parameter is NULL, tlsio_openssl_compact_dowork shall do nothing except log an error. ]*/
     ASSIGN_AND_CHECK_TLSIO_INSTANCE
     {
         if (tls_io_instance->tlsio_state == TLSIO_STATE_OPEN)

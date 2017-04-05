@@ -229,7 +229,7 @@ The `tlsio_openssl_compact_dowork` call executes async jobs for the tlsio. For t
 
 The underlying OpenSSL `SSL_read` call does not return errors if the connection has been lost, so the tlsio will not know if the connection has been lost until it attempts a write operation.
 
-**SRS_TLSIO_OPENSSL_COMPACT_30_048: [** If the `tlsio_handle` parameter is NULL, `tlsio_openssl_compact_dowork` shall do nothing except log an error and return _FAILURE_. **]**
+**SRS_TLSIO_OPENSSL_COMPACT_30_048: [** If the `tlsio_handle` parameter is NULL, `tlsio_openssl_compact_dowork` shall do nothing except log an error. **]**
 
 **SRS_TLSIO_OPENSSL_COMPACT_30_049: [** If the ssl client is able to provide received data, the `tlsio_openssl_compact_dowork` shall read this data and call  `on_bytes_received` with the pointer to the buffer containing the data and the number of bytes received. **]**
 

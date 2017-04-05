@@ -15,21 +15,7 @@ extern "C" {
 #include "azure_c_shared_utility/macro_utils.h"
 #include "azure_c_shared_utility/umock_c_prod.h"
 
-#ifndef AZURE_SSL_SOCKET_SO_KEEPALIVE
-#define AZURE_SSL_SOCKET_SO_KEEPALIVE 1    /* enable keepalive */
-#endif
-
-#ifndef AZURE_SSL_SOCKET_TCP_KEEPIDLE
-#define AZURE_SSL_SOCKET_TCP_KEEPIDLE 20   /* seconds */
-#endif
-
-#ifndef AZURE_SSL_SOCKET_TCP_KEEPINTVL
-#define AZURE_SSL_SOCKET_TCP_KEEPINTVL 2   /* seconds */
-#endif
-
-#ifndef AZURE_SSL_SOCKET_TCP_KEEPCNT
-#define AZURE_SSL_SOCKET_TCP_KEEPCNT 3     /* retry count */
-#endif
+#define SSL_SOCKET_NULL_SOCKET -1
 
 	/**
 	* @brief	Perform a DNS lookup on the serverName and return an IPv4 address.
@@ -48,7 +34,7 @@ extern "C" {
 	* @param   port	The port of the SSL server to use.
 	*
 	* @return	@c An integer file descriptor (fd) if the API call
-	*          is successful or -1 in case it fails. Error logging is
+	*          is successful or SSL_SOCKET_NULL_SOCKET in case it fails. Error logging is
 	*          performed by the underlying concrete implementation, so no
 	*          further error logging is necessary.
 	*/

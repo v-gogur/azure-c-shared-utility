@@ -571,7 +571,7 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
                 {
                     reset_callback_context_records();
 
-                    /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_048: [ If the tlsio_handle parameter is NULL, tlsio_openssl_compact_dowork shall do nothing except log an error and return FAILURE. ]*/
+                    /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_048: [ If the tlsio_handle parameter is NULL, tlsio_openssl_compact_dowork shall do nothing except log an error. ]*/
                     CONCRETE_IO_HANDLE tlsio_for_do_work = test_point == TP_SSL_read_NULL_TLSIO_FAIL ? 0 : tlsio;
 
                     tlsio_id->concrete_io_dowork(tlsio_for_do_work);
