@@ -11,13 +11,18 @@
 #include "azure_c_shared_utility/gballoc.h"
 #include "azure_c_shared_utility/tlsio.h"
 #include "azure_c_shared_utility/xlogging.h"
-#include "azure_c_shared_utility/crt_abstractions.h"
 #include "azure_c_shared_utility/threadapi.h"
 #include "azure_c_shared_utility/ssl_socket.h"
+#include "azure_c_shared_utility/agenttime.h"
 
+// It is not anticipated that there should ever be a need to modify the
+// SSL_MAX_BLOCK_TIME_SECONDS value, but if there is then it can be
+// overridded with a preprocessor #define
+#ifndef SSL_MAX_BLOCK_TIME_SECONDS
+#define SSL_MAX_BLOCK_TIME_SECONDS 20
+#endif // !SSL_MAX_BLOCK_TIME_SECONDS
 
-#define CONNECT_RETRY_DELAY_MILLISECONDS 1000
-#define SEND_RETRY_DELAY_MILLISECONDS 5
+#define SSL_MESSAGE_PUMP_DELAY_MILLISECONDS 2
 
 // DOWORK_TRANSFER_BUFFER_SIZE is not very important because if the message is bigger
 // then the framework just calls dowork repeatedly until it gets everything. So
@@ -190,6 +195,7 @@ static int create_and_connect_ssl(TLS_IO_INSTANCE* tls_io_instance)
                     // not recognize that the while loop will always execute, and so it
                     // puts up an uninitialized variable warning.
                     result = __FAILURE__;
+                    time_t end_time = get_time(NULL) + SSL_MAX_BLOCK_TIME_SECONDS;
                     while (!done)
                     {
                         int connect_result = SSL_connect(tls_io_instance->ssl);
@@ -217,9 +223,21 @@ static int create_and_connect_ssl(TLS_IO_INSTANCE* tls_io_instance)
                                 done = true;
                                 LogInfo("Hard error from SSL_connect: %d", hard_error);
                             }
+                            else
+                            {
+                                time_t now = get_time(NULL);
+                                if (now > end_time) 
+                                {
+                                    /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_074: [ The tlsio_openssl_compact_send shall spend no longer than the internally defined SSL_MAX_BLOCK_TIME_SECONDS (20 seconds) attempting to perform the open operation. ]*/
+                                    // This has taken too long, so bail out
+                                    result = __FAILURE__;
+                                    done = true;
+                                    LogInfo("Timeout from SSL_connect");
+                                }
+                            }
                         }
 
-                        ThreadAPI_Sleep(CONNECT_RETRY_DELAY_MILLISECONDS);
+                        ThreadAPI_Sleep(SSL_MESSAGE_PUMP_DELAY_MILLISECONDS);
                     }
                 }
             }
@@ -486,6 +504,7 @@ int tlsio_openssl_send(CONCRETE_IO_HANDLE tls_io, const void* buffer, size_t siz
                 /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_040: [ The tlsio_openssl_compact_send shall send the first size bytes in buffer to the ssl connection. ]*/
                 /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_043: [ if the ssl was not able to send all data in the buffer, the tlsio_openssl_compact_send shall call the ssl again to send the remaining bytes. ]*/
                 /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_047: [ If the size is 0, the tlsio_openssl_compact_send shall shall call the on_send_complete with IO_SEND_OK and return 0. ]*/
+                time_t end_time = get_time(NULL) + SSL_MAX_BLOCK_TIME_SECONDS;
                 while (size > 0)
                 {
                     res = SSL_write(tls_io_instance->ssl, ((uint8_t*)buffer) + total_written, size);
@@ -506,9 +525,20 @@ int tlsio_openssl_send(CONCRETE_IO_HANDLE tls_io, const void* buffer, size_t siz
                             LogInfo("Error from SSL_write: %d", hard_error);
                             break;
                         }
+                        else
+                        {
+                            time_t now = get_time(NULL);
+                            if (now > end_time)
+                            {
+                                /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_073: [ The tlsio_openssl_compact_send shall spend no longer than the internally defined SSL_MAX_BLOCK_TIME_SECONDS (20 seconds) attempting to perform the send operation. ]*/
+                                // This has taken too long, so bail out
+                                LogInfo("Timeout from SSL_connect");
+                                break;
+                            }
+                        }
                     }
                     // Try again real soon
-                    ThreadAPI_Sleep(SEND_RETRY_DELAY_MILLISECONDS);
+                    ThreadAPI_Sleep(SSL_MESSAGE_PUMP_DELAY_MILLISECONDS);
                 }
 
                 if (total_written == bytes_to_send)
@@ -542,10 +572,10 @@ int tlsio_openssl_send(CONCRETE_IO_HANDLE tls_io, const void* buffer, size_t siz
 /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_004: [ The tlsio_openssl_compact shall call the callbacks functions defined in the xio.h ]*/
 void tlsio_openssl_dowork(CONCRETE_IO_HANDLE tls_io)
 {
-    /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_048: [ If the tlsio_handle parameter is NULL, tlsio_openssl_compact_dowork shall do nothing except log an error and return FAILURE. ]*/
     TLS_IO_INSTANCE* tls_io_instance = (TLS_IO_INSTANCE*)tls_io;
     if (tls_io_instance == NULL)
     {
+        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_048: [ If the tlsio_handle parameter is NULL, tlsio_openssl_compact_dowork shall do nothing except log an error and return FAILURE. ]*/
         LogError(null_tlsio_message);
     }
     else

@@ -12,6 +12,7 @@ ${theseTestsName}.c
 
 set(${theseTestsName}_c_files
 ../../adapters/tlsio_openssl_compact.c
+../../adapters/agenttime.c
 )
 
 set(${theseTestsName}_h_files
