@@ -11,7 +11,7 @@
 
 #ifdef WIN32
 // The timeout unit tests take 20 seconds each, so they're only run manually in Windows
-#define UNIT_TEST_RUN_TIMEOUT_TESTS
+//#define UNIT_TEST_RUN_TIMEOUT_TESTS
 #endif
 #define SSL_MAX_BLOCK_TIME_SECONDS 20
 
