@@ -228,7 +228,7 @@ static int create_and_connect_ssl(TLS_IO_INSTANCE* tls_io_instance)
                                 time_t now = get_time(NULL);
                                 if (now > end_time) 
                                 {
-                                    /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_074: [ The tlsio_openssl_compact_send shall spend no longer than the internally defined SSL_MAX_BLOCK_TIME_SECONDS (20 seconds) attempting to perform the open operation. ]*/
+                                    /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_074: [ The tlsio_openssl_compact_send shall spend no longer than the internally defined SSL_MAX_BLOCK_TIME_SECONDS (20 seconds) attempting to perform the SSL_connect operation. ]*/
                                     // This has taken too long, so bail out
                                     result = __FAILURE__;
                                     done = true;
@@ -530,7 +530,7 @@ int tlsio_openssl_send(CONCRETE_IO_HANDLE tls_io, const void* buffer, size_t siz
                             time_t now = get_time(NULL);
                             if (now > end_time)
                             {
-                                /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_073: [ The tlsio_openssl_compact_send shall spend no longer than the internally defined SSL_MAX_BLOCK_TIME_SECONDS (20 seconds) attempting to perform the send operation. ]*/
+                                /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_073: [ The tlsio_openssl_compact_send shall spend no longer than the internally defined SSL_MAX_BLOCK_TIME_SECONDS (20 seconds) attempting to perform the SSL_write operation. ]*/
                                 // This has taken too long, so bail out
                                 LogInfo("Timeout from SSL_connect");
                                 break;

@@ -27,6 +27,7 @@ enum
     TP_SSL_CTX_new_FAIL,	    // SSL_CTX_new fails
     TP_SSL_new_FAIL,		    // SSL_new fails
     TP_SSL_set_fd_FAIL,		    // SSL_set_fd fails
+    TP_SSL_connect_TIMEOUT_FAIL,    // SSL_connect fails with timeout
     TP_SSL_connect_0_FAIL,	    // SSL_connect fails with failure sequence 0
     TP_SSL_connect_1_FAIL,	    // SSL_connect fails with failure sequence 1
     TP_SSL_connect_0_OK,	    // SSL_connect fails with success sequence 0
@@ -45,6 +46,7 @@ enum
     // Send
     TP_SEND_NULL_BUFFER_FAIL,	// Send with no read buffer
     TP_SEND_NULL_TLSIO_FAIL,    // Send with null tlsio
+    TP_SSL_write_TIMEOUT_FAIL,  // Send with timeout failure
     TP_SSL_write_FAIL,          // SSl_write fails
     TP_SSL_write_OK,            // SSl_write succeeds
     TP_Send_no_callback_OK,     // SSl_write succeeds with no callback provided
@@ -89,6 +91,7 @@ static X test_point_names[] =
     TEST_POINT_NAME(TP_SSL_CTX_new_FAIL)
     TEST_POINT_NAME(TP_SSL_new_FAIL)
     TEST_POINT_NAME(TP_SSL_set_fd_FAIL)
+    TEST_POINT_NAME(TP_SSL_connect_TIMEOUT_FAIL)
     TEST_POINT_NAME(TP_SSL_connect_0_FAIL)
     TEST_POINT_NAME(TP_SSL_connect_1_FAIL)
     TEST_POINT_NAME(TP_SSL_connect_0_OK)
@@ -107,6 +110,7 @@ static X test_point_names[] =
     // Send
     TEST_POINT_NAME(TP_SEND_NULL_BUFFER_FAIL)
     TEST_POINT_NAME(TP_SEND_NULL_TLSIO_FAIL)
+    TEST_POINT_NAME(TP_SSL_write_TIMEOUT_FAIL)
     TEST_POINT_NAME(TP_SSL_write_FAIL)
     TEST_POINT_NAME(TP_SSL_write_OK)
     TEST_POINT_NAME(TP_Send_no_callback_OK)

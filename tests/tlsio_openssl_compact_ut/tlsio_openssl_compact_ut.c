@@ -9,6 +9,12 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+#ifdef WIN32
+// The timeout unit tests take 20 seconds each, so they're only run manually in Windows
+#define UNIT_TEST_RUN_TIMEOUT_TESTS
+#endif
+#define SSL_MAX_BLOCK_TIME_SECONDS 20
+
 /**
  * The gballoc.h will replace the malloc, free, and realloc by the my_gballoc functions, in this case,
  *    if you define these mock functions after include the gballoc.h, you will create an infinity recursion,
@@ -208,6 +214,13 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
 
         for (int test_point = 0; test_point <= TP_FINAL_OK; test_point++)
         {
+#ifndef UNIT_TEST_RUN_TIMEOUT_TESTS
+            if (test_point == TP_SSL_connect_TIMEOUT_FAIL || test_point == TP_SSL_write_TIMEOUT_FAIL)
+            {
+                printf("\n\nSkipping timeout test point: %d  %s\n", test_point, test_point_names[test_point].name);
+                continue;
+            }
+#endif
             /////////////////////////////////////////////////////////////////////////////
             ///arrange
             /////////////////////////////////////////////////////////////////////////////
@@ -239,6 +252,7 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
             //      TP_SSL_CTX_new_FAIL
             //      TP_SSL_new_FAIL
             //      TP_SSL_set_fd_FAIL
+            //      TP_SSL_connect_TIMEOUT_FAIL
             //      TP_SSL_connect_0_FAIL
             //      TP_SSL_connect_1_FAIL
             //      TP_SSL_connect_0_OK
@@ -252,7 +266,7 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
             TEST_POINT(TP_SSL_set_fd_FAIL, SSL_set_fd(SSL_Good_Ptr, SSL_Good_Socket));
 
             // SSL_connect can succeed and fail in several different sequences
-            if (test_point < TP_SSL_connect_0_FAIL)
+            if (test_point < TP_SSL_connect_TIMEOUT_FAIL)
             {
                 PREPARE_ERROR_SEQUENCE_FOR_UNCALLED_SSL_CONNECT();
             }
@@ -260,6 +274,9 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
             {
                 switch (test_point)
                 {
+                case TP_SSL_connect_TIMEOUT_FAIL:
+                    PREPARE_ERROR_SEQUENCE_FOR_SSL_CONNECT_TIMEOUT();
+                    break;
                 case TP_SSL_connect_0_FAIL:
                     PREPARE_ERROR_SEQUENCE_FOR_SSL_CONNECT(SSL_CONNECT_FAIL_ERROR_SEQUENCE_0);
                     NO_FAIL_TEST_POINT(TP_SSL_connect_0_FAIL, SSL_connect(SSL_Good_Ptr));
@@ -289,6 +306,7 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
             // The Send test points
             //      TP_SEND_NULL_BUFFER_FAIL
             //      TP_SEND_NULL_TLSIO_FAIL
+            //      TP_SSL_write_TIMEOUT_FAIL
             //      TP_SSL_write_FAIL
             //      TP_SSL_write_OK
             //      TP_Send_no_callback_OK
@@ -301,6 +319,10 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
                 case TP_SEND_NULL_TLSIO_FAIL:
                 case TP_Send_zero_bytes_OK:
                     // No expected call preparation needed here
+                    break;
+                case TP_SSL_write_TIMEOUT_FAIL:
+                    PREPARE_ERROR_SEQUENCE_FOR_SSL_WRITE_TIMEOUT();
+                    expect_ssl_write = false;
                     break;
                 case TP_SSL_write_FAIL:
                     expect_ssl_write = true;
@@ -478,6 +500,7 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
                 //      TP_SSL_CTX_new_FAIL
                 //      TP_SSL_new_FAIL
                 //      TP_SSL_set_fd_FAIL
+                //      TP_SSL_connect_TIMEOUT_FAIL
                 //      TP_SSL_connect_0_FAIL
                 //      TP_SSL_connect_1_FAIL
                 //      TP_SSL_connect_0_OK
@@ -487,6 +510,7 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
                 //
                 reset_callback_context_records();
                 ACTIVATE_SSL_CONNECT_ERROR_SEQUENCE();
+                time_t open_start_time = time(NULL);
 
                 /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_019: [ If the tlsio_handle parameter is NULL, tlsio_openssl_compact_open shall log an error and return FAILURE. ]*/
                 CONCRETE_IO_HANDLE tlsio_for_open_call = test_point == TP_OPEN_NULL_TLSIO_FAIL ?NULL : tlsio;
@@ -533,6 +557,17 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
                     /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_002: [ The tlsio_openssl_compact shall report the open operation status using the IO_OPEN_RESULT enumerator defined in the xio.h ]*/
                     /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_031: [ If the tlsio_openssl_compact_open fails to open the tls connection, and the on_io_open_complete callback was provided, it shall call on_io_open_complete with IO_OPEN_ERROR. ]*/
                     ASSERT_IO_OPEN_CALLBACK(true, IO_OPEN_ERROR);
+
+                    if (test_point == TP_SSL_connect_TIMEOUT_FAIL)
+                    {
+                        /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_074: [ The tlsio_openssl_compact_send shall spend no longer than the internally defined SSL_MAX_BLOCK_TIME_SECONDS (20 seconds) attempting to perform the SSL_connect operation. ]*/
+                        time_t elapsed = time(NULL) - open_start_time;
+                        printf("TP_SSL_connect_TIMEOUT_FAIL time expected approx %u seconds, is %u seconds\n", SSL_MAX_BLOCK_TIME_SECONDS, (unsigned int)elapsed);
+                        if (elapsed < SSL_MAX_BLOCK_TIME_SECONDS || elapsed > SSL_MAX_BLOCK_TIME_SECONDS + 2)
+                        {
+                            ASSERT_FAIL("Unexpected timeout elapsed time");
+                        }
+                    }
                 }
 
                 // Open while still open
@@ -556,6 +591,7 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
                 // The Send test points
                 //      TP_SEND_NULL_BUFFER_FAIL
                 //      TP_SEND_NULL_TLSIO_FAIL
+                //      TP_SSL_write_TIMEOUT_FAIL
                 //      TP_SSL_write_FAIL
                 //      TP_SSL_write_OK
                 //      TP_Send_no_callback_OK
@@ -565,6 +601,8 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
                 {
                     ACTIVATE_SSL_WRITE_ERROR_SEQUENCE();
                     reset_callback_context_records();
+                    time_t send_start_time = time(NULL);
+
 
                     /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_046: [ If the buffer is NULL, the tlsio_openssl_compact_send shall log the error and return FAILURE. ]*/
                     uint8_t* buffer = test_point == TP_SEND_NULL_BUFFER_FAIL ? NULL : SSL_send_buffer;
@@ -578,14 +616,14 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
                     int send_result = tlsio_id->concrete_io_send(tlsio_for_send_call, 
                         buffer, bytes_to_send, on_io_send_complete, IO_SEND_COMPLETE_CONTEXT);
 
-                    if (test_point == TP_SSL_write_FAIL)
+                    if (test_point == TP_SSL_write_FAIL || test_point == TP_SSL_write_TIMEOUT_FAIL)
                     {
                         /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_044: [ if the SSL_write call fails unexpectedly, the tlsio_openssl_compact_send shall enter the "Not Open" state, call the on_send_complete with IO_SEND_ERROR, and return FAILURE. ]*/
                         ASSERT_TLSIO_NOT_OPEN(tlsio);
                     }
                     else
                     {
-                        // Only TP_SSL_write_FAIL should force a close
+                        // Only TP_SSL_write_FAIL and TP_SSL_write_TIMEOUT_FAIL should force a close
                         ASSERT_TLSIO_OPEN(tlsio);
                     }
 
@@ -613,6 +651,17 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
                         /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_003: [ The tlsio_openssl_compact shall report the send operation status using the IO_SEND_RESULT enumerator defined in the xio.h ]*/
                         /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_041: [ The tlsio_openssl_compact_send shall call the provided on_send_complete callback function. ]*/
                         ASSERT_IO_SEND_CALLBACK(true, IO_SEND_ERROR);
+
+                        if (test_point == TP_SSL_write_TIMEOUT_FAIL)
+                        {
+                            /* Tests_RS_TLSIO_OPENSSL_COMPACT_30_073: [ The tlsio_openssl_compact_send shall spend no longer than the internally defined SSL_MAX_BLOCK_TIME_SECONDS (20 seconds) attempting to perform the SSL_write operation. ]*/
+                            time_t elapsed = time(NULL) - send_start_time;
+                            printf("TP_SSL_write_TIMEOUT_FAIL time expected approx %u seconds, is %u seconds\n", SSL_MAX_BLOCK_TIME_SECONDS, (unsigned int)elapsed);
+                            if (elapsed < SSL_MAX_BLOCK_TIME_SECONDS || elapsed > SSL_MAX_BLOCK_TIME_SECONDS + 2)
+                            {
+                                ASSERT_FAIL("Unexpected timeout elapsed time");
+                            }
+                        }
                     }
                 }
                 // End send
@@ -653,7 +702,7 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
                 {
                     case TP_SSL_write_FAIL:
                     case TP_Destroy_without_close_OK:
-                    case TP_Open_while_still_open_FAIL:
+                    case TP_SSL_write_TIMEOUT_FAIL:
                         do_normal_teardown = false;
                         break;
                 }
@@ -730,7 +779,10 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
             * The follow assert will compare the expected calls with the actual calls. If it is different,
             *    it will show the serialized strings with the differences in the log.
             */
-            ASSERT_ARE_EQUAL(char_ptr, umock_c_get_expected_calls(), umock_c_get_actual_calls());
+            if (test_point != TP_SSL_connect_TIMEOUT_FAIL && test_point != TP_SSL_write_TIMEOUT_FAIL)
+            {
+                ASSERT_ARE_EQUAL(char_ptr, umock_c_get_expected_calls(), umock_c_get_actual_calls());
+            }
 
             ///cleanup
             umock_c_negative_tests_deinit();

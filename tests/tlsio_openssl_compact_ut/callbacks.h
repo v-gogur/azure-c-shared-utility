@@ -9,7 +9,19 @@
 //  Empty functions. These must be available to call, but they have no effect
 int TLSv1_2_client_method() { return 0; }
 void SSL_CTX_set_default_read_buffer_len(SSL_CTX* dummy, int dummy2) { dummy; dummy2; }
-void ThreadAPI_Sleep(unsigned int milliseconds) { milliseconds; return; }
+
+// The timeout tests only run manually under Windows
+#ifdef UNIT_TEST_RUN_TIMEOUT_TESTS
+#include <Windows.h>
+#endif
+void ThreadAPI_Sleep(unsigned int milliseconds) 
+{ 
+#ifdef UNIT_TEST_RUN_TIMEOUT_TESTS
+    Sleep(milliseconds);
+#else
+    milliseconds; return; 
+#endif  // UNIT_TEST_RUN_TIMEOUT_TESTS
+}
 // End of empty functions
 /////////////////////////////////////////////////////////////////////
 

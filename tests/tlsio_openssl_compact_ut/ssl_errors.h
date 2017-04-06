@@ -41,11 +41,12 @@ typedef struct SSL_error_sequence
     int main_index;
     int extended_index;
     int size;
+    bool timeout_fail;
     SSL_error_pair* sequence;
 } SSL_error_sequence;
 
-static  SSL_error_sequence SSL_connect_error_sequence = { 0, 0, 0, NULL };
-static  SSL_error_sequence SSL_write_error_sequence = { 0, 0, 0, NULL };
+static  SSL_error_sequence SSL_connect_error_sequence = { 0, 0, 0, false, NULL };
+static  SSL_error_sequence SSL_write_error_sequence = { 0, 0, 0, false, NULL };
 static SSL_error_sequence* current_ssl_get_error_sequence = &SSL_connect_error_sequence;
 
 enum
@@ -116,7 +117,14 @@ static SSL_error_pair SSL_WRITE_OK_ERROR_SEQUENCE_impl[] =
 /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_043: [ if the ssl was not able to send all data in the buffer, the tlsio_openssl_compact_send shall call the ssl again to send the remaining bytes. ]*/
 int my_SSL_write(SSL* ssl, uint8_t* buffer, size_t size)
 {
+    buffer; // not used
+    size;   // not used
     ASSERT_ARE_EQUAL(int, (int)ssl, (int)SSL_Good_Ptr);
+    if (SSL_write_error_sequence.timeout_fail)
+    {
+        // The timeout failure loops with failure
+        return -1;
+    }
     int result = SSL_write_error_sequence.sequence[SSL_write_error_sequence.main_index].main;
     if (SSL_write_error_sequence.sequence[SSL_write_error_sequence.main_index].expectNoExtendedErrorCall)
     {
@@ -126,8 +134,6 @@ int my_SSL_write(SSL* ssl, uint8_t* buffer, size_t size)
         SSL_write_error_sequence.extended_index++;
     }
     SSL_write_error_sequence.main_index++;
-    buffer;
-    size;
     return result;
 }
 
@@ -162,6 +168,16 @@ void PREPARE_ERROR_SEQUENCE_FOR_UNCALLED_SSL_CONNECT()
     SSL_error_sequence* seq = &SSL_connect_error_sequence;
     seq->sequence = NULL;
     seq->size = 0;
+    seq->timeout_fail = false;
+}
+
+void PREPARE_ERROR_SEQUENCE_FOR_SSL_CONNECT_TIMEOUT()
+{
+    SSL_error_sequence* seq = &SSL_connect_error_sequence;
+    assert_last_error_sequence(seq);
+    seq->main_index = seq->size;
+    seq->extended_index = seq->size;
+    seq->timeout_fail = true;
 }
 
 void PREPARE_ERROR_SEQUENCE_FOR_SSL_CONNECT(int sequence)
@@ -171,6 +187,7 @@ void PREPARE_ERROR_SEQUENCE_FOR_SSL_CONNECT(int sequence)
     assert_last_error_sequence(seq);
     seq->main_index = 0;
     seq->extended_index = 0;
+    seq->timeout_fail = false;
     switch (sequence)
     {
         SSL_ERROR_SEQUENCE_CASE_ENTRY(SSL_CONNECT_FAIL_ERROR_SEQUENCE_0);
@@ -185,6 +202,20 @@ void PREPARE_ERROR_SEQUENCE_FOR_SSL_CONNECT(int sequence)
     }
 }
 
+void ACTIVATE_SSL_CONNECT_ERROR_SEQUENCE()
+{
+    current_ssl_get_error_sequence = &SSL_connect_error_sequence;
+}
+
+void PREPARE_ERROR_SEQUENCE_FOR_SSL_WRITE_TIMEOUT()
+{
+    SSL_error_sequence* seq = &SSL_write_error_sequence;
+    assert_last_error_sequence(seq);
+    seq->main_index = seq->size;
+    seq->extended_index = seq->size;
+    seq->timeout_fail = true;
+}
+
 void PREPARE_ERROR_SEQUENCE_FOR_SSL_WRITE(int sequence)
 {
     // The initial state must be correct also
@@ -192,6 +223,7 @@ void PREPARE_ERROR_SEQUENCE_FOR_SSL_WRITE(int sequence)
     assert_last_error_sequence(seq);
     seq->main_index = 0;
     seq->extended_index = 0;
+    seq->timeout_fail = false;
     switch (sequence)
     {
         SSL_ERROR_SEQUENCE_CASE_ENTRY(SSL_WRITE_FAIL_ERROR_SEQUENCE);
@@ -204,11 +236,6 @@ void PREPARE_ERROR_SEQUENCE_FOR_SSL_WRITE(int sequence)
     }
 }
 
-void ACTIVATE_SSL_CONNECT_ERROR_SEQUENCE()
-{
-    current_ssl_get_error_sequence = &SSL_connect_error_sequence;
-}
-
 void ACTIVATE_SSL_WRITE_ERROR_SEQUENCE()
 {
     current_ssl_get_error_sequence = &SSL_write_error_sequence;
@@ -217,6 +244,11 @@ void ACTIVATE_SSL_WRITE_ERROR_SEQUENCE()
 static int my_SSL_connect(SSL* ssl)
 {
     ASSERT_ARE_EQUAL(int, (int)ssl, (int)SSL_Good_Ptr);
+    if (SSL_connect_error_sequence.timeout_fail)
+    {
+        // The timeout failure loops with failure
+        return -1;
+    }
     int result = SSL_connect_error_sequence.sequence[SSL_connect_error_sequence.main_index].main;
     if (SSL_connect_error_sequence.sequence[SSL_connect_error_sequence.main_index].expectNoExtendedErrorCall)
     {
@@ -246,6 +278,12 @@ int SSL_get_error(SSL* ssl, int last_error)
 {
     last_error;
     ASSERT_ARE_EQUAL(int, (int)ssl, (int)SSL_Good_Ptr);
+    if (current_ssl_get_error_sequence->timeout_fail)
+    {
+        // We don't check call stack for timeouts
+        umock_c_reset_all_calls();
+        return SSL_ERROR_WANT_READ;
+    }
     int result = current_ssl_get_error_sequence->sequence[current_ssl_get_error_sequence->extended_index].extended;
     current_ssl_get_error_sequence->extended_index++;
     return result;
