@@ -468,10 +468,12 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
                 {
                     //ASSERT_ARE_NOT_EQUAL_WITH_MSG(int, 0, set_option_result, "Unexpected failure from concrete_io_setoption");
                     set_option_result;
+                    // Options are not fully supported yet
                 }
                 else
                 {
                     //ASSERT_ARE_EQUAL_WITH_MSG(int, 0, set_option_result, "Unexpected success from concrete_io_setoption");
+                    // Options are not fully supported yet
                 }
 
                 // end Set Options

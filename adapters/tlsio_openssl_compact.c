@@ -22,6 +22,8 @@
 #define SSL_MAX_BLOCK_TIME_SECONDS 20
 #endif // !SSL_MAX_BLOCK_TIME_SECONDS
 
+// A delay time that seems good for when the ssl client wants repeated
+// callbacks to finish a conversation with the server. 
 #define SSL_MESSAGE_PUMP_DELAY_MILLISECONDS 2
 
 // DOWORK_TRANSFER_BUFFER_SIZE is not very important because if the message is bigger
@@ -142,6 +144,7 @@ static int create_and_connect_ssl(TLS_IO_INSTANCE* tls_io_instance)
     if (sock < 0)
     {
         // This is a communication interruption rather than a program bug
+        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_030: [ If tlsio_openssl_compact_open fails to open the ssl connection with a non-NULL tlsio_handle, it shall enter the "Not Open" state and return FAILURE. ]*/
         LogInfo("Could not open the socket");
         result = __FAILURE__;
     }
@@ -154,6 +157,7 @@ static int create_and_connect_ssl(TLS_IO_INSTANCE* tls_io_instance)
         tls_io_instance->ssl_context = SSL_CTX_new(TLSv1_2_client_method());
         if (tls_io_instance->ssl_context == NULL)
         {
+            /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_030: [ If tlsio_openssl_compact_open fails to open the ssl connection with a non-NULL tlsio_handle, it shall enter the "Not Open" state and return FAILURE. ]*/
             result = __FAILURE__;
             LogError("create new SSL CTX failed");
         }
@@ -162,6 +166,7 @@ static int create_and_connect_ssl(TLS_IO_INSTANCE* tls_io_instance)
             tls_io_instance->ssl = SSL_new(tls_io_instance->ssl_context);
             if (tls_io_instance->ssl == NULL)
             {
+                /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_030: [ If tlsio_openssl_compact_open fails to open the ssl connection with a non-NULL tlsio_handle, it shall enter the "Not Open" state and return FAILURE. ]*/
                 result = __FAILURE__;
                 LogError("SSL_new failed");
             }
@@ -171,6 +176,7 @@ static int create_and_connect_ssl(TLS_IO_INSTANCE* tls_io_instance)
                 ret = SSL_set_fd(tls_io_instance->ssl, sock);
                 if (ret != 1)
                 {
+                    /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_030: [ If tlsio_openssl_compact_open fails to open the ssl connection with a non-NULL tlsio_handle, it shall enter the "Not Open" state and return FAILURE. ]*/
                     result = __FAILURE__;
                     LogError("SSL_set_fd failed");
                 }
@@ -195,6 +201,8 @@ static int create_and_connect_ssl(TLS_IO_INSTANCE* tls_io_instance)
                     // not recognize that the while loop will always execute, and so it
                     // puts up an uninitialized variable warning.
                     result = __FAILURE__;
+
+                    // 
                     time_t end_time = get_time(NULL) + SSL_MAX_BLOCK_TIME_SECONDS;
                     while (!done)
                     {
@@ -219,6 +227,7 @@ static int create_and_connect_ssl(TLS_IO_INSTANCE* tls_io_instance)
                             if (hard_error != 0)
                             {
                                 // Connect failed, so delete the connection objects
+                                /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_030: [ If tlsio_openssl_compact_open fails to open the ssl connection with a non-NULL tlsio_handle, it shall enter the "Not Open" state and return FAILURE. ]*/
                                 result = __FAILURE__;
                                 done = true;
                                 LogInfo("Hard error from SSL_connect: %d", hard_error);
@@ -229,6 +238,7 @@ static int create_and_connect_ssl(TLS_IO_INSTANCE* tls_io_instance)
                                 if (now > end_time) 
                                 {
                                     /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_074: [ The tlsio_openssl_compact_send shall spend no longer than the internally defined SSL_MAX_BLOCK_TIME_SECONDS (20 seconds) attempting to perform the SSL_connect operation. ]*/
+                                    /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_030: [ If tlsio_openssl_compact_open fails to open the ssl connection with a non-NULL tlsio_handle, it shall enter the "Not Open" state and return FAILURE. ]*/
                                     // This has taken too long, so bail out
                                     result = __FAILURE__;
                                     done = true;
@@ -362,16 +372,6 @@ int tlsio_openssl_open(CONCRETE_IO_HANDLE tls_io,
         }
         else
         {
-            /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_022: [ The tlsio_openssl_compact_open shall store the provided on_bytes_received callback function address. ]*/
-            /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_023: [ The tlsio_openssl_compact_open shall store the provided on_bytes_received_context handle. ]*/
-            tls_io_instance->on_bytes_received = on_bytes_received;
-            tls_io_instance->on_bytes_received_context = on_bytes_received_context;
-
-            /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_024: [ The tlsio_openssl_compact_open shall store the provided on_io_error callback function address. ]*/
-            /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_025: [ The tlsio_openssl_compact_open shall store the provided on_io_error_context handle. ]*/
-            tls_io_instance->on_io_error = on_io_error;
-            tls_io_instance->on_io_error_context = on_io_error_context;
-
             if (on_bytes_received == NULL)
             {
                 /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_052: [ If the on_io_error parameter is NULL, tlsio_openssl_compact_open shall log an error and return FAILURE. ]*/
@@ -396,6 +396,16 @@ int tlsio_openssl_open(CONCRETE_IO_HANDLE tls_io,
                     }
                     else
                     {
+                        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_022: [ The tlsio_openssl_compact_open shall store the provided on_bytes_received callback function address. ]*/
+                        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_023: [ The tlsio_openssl_compact_open shall store the provided on_bytes_received_context handle. ]*/
+                        tls_io_instance->on_bytes_received = on_bytes_received;
+                        tls_io_instance->on_bytes_received_context = on_bytes_received_context;
+
+                        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_024: [ The tlsio_openssl_compact_open shall store the provided on_io_error callback function address. ]*/
+                        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_025: [ The tlsio_openssl_compact_open shall store the provided on_io_error_context handle. ]*/
+                        tls_io_instance->on_io_error = on_io_error;
+                        tls_io_instance->on_io_error_context = on_io_error_context;
+
                         /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_026: [ If tlsio_openssl_compact_open successfully opens the ssl connection, it shall enter the "Open" state and return 0. ]*/
                         result = create_and_connect_ssl(tls_io_instance);
                     }
