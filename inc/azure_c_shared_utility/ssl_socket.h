@@ -38,7 +38,7 @@ extern "C" {
 	*          performed by the underlying concrete implementation, so no
 	*          further error logging is necessary.
 	*/
-	MOCKABLE_FUNCTION(, int, SSL_Socket_Create, uint32_t, serverIPv4, int, port);
+	MOCKABLE_FUNCTION(, int, SSL_Socket_Create, uint32_t, serverIPv4, uint16_t, port);
 
     /**
     * @brief	Close the socket returned by SSL_Socket_Create.
