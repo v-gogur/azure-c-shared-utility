@@ -3,7 +3,7 @@
 
 #include "azure_c_shared_utility/platform.h"
 #include "azure_c_shared_utility/sntp.h"
-#include "azure_c_shared_utility/tlsio_openssl.h"
+#include "azure_c_shared_utility/tlsio.h"
 
 static const char* const ntpServer = "pool.ntp.org";
 
@@ -12,6 +12,7 @@ static const char* const ntpServer = "pool.ntp.org";
 int platform_init(void)
 {
 	// SNTP_SetServerName logs any necessary errors
+    LogInfo("platform_init");
 	int result = SNTP_SetServerName(ntpServer);
 	if (result == 0)
 	{
@@ -24,7 +25,8 @@ int platform_init(void)
 /* Codes_SRS_PLATFORM_OPENSSL_COMPACT_30_008: [ The platform_get_default_tlsio shall return a set of tlsio functions provided by the OpenSSL micro tlsio implementation. ] */
 const IO_INTERFACE_DESCRIPTION* platform_get_default_tlsio(void)
 {
-    return tlsio_openssl_get_interface_description();
+    LogInfo("platform_get_default_tlsio");
+    return tlsio_get_interface_description();
 }
 
 STRING_HANDLE platform_get_platform_info(void)
