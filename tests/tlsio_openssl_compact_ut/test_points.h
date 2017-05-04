@@ -164,7 +164,7 @@ static void InitTestPoints()
 // NO_FAIL_TEST_POINT means that this call is expected at the provided test point and beyond,
 // and the framework will not fail the call.
 // The messy macro on line 2 of NO_FAIL_TEST_POINT is the expansion of STRICT_EXPECTED_CALL
-#define NO_FAIL_TEST_POINT(fp, call) if(test_point >= fp) {  \
+#define TEST_POINT_NO_FAIL(fp, call) if(test_point >= fp) {  \
     C2(get_auto_ignore_args_function_, call)(C2(umock_c_strict_expected_,call), #call);			\
     expected_call_count++;		\
 }

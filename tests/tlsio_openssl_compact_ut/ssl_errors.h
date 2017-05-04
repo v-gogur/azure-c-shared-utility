@@ -98,8 +98,8 @@ static SSL_error_pair SSL_WRITE_FAIL_ERROR_SEQUENCE_impl[] =
 };
 
 // Assumes input of "11111111222222223333";
-/* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_040: [ The tlsio_openssl_compact_send shall send the first size bytes in buffer to the ssl connection. ]*/
-/* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_043: [ if the ssl was not able to send all data in the buffer, the tlsio_openssl_compact_send shall call the ssl again to send the remaining bytes. ]*/
+/* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_040: [ The tlsio_openssl_compact_send shall enqueue the size bytes in buffer for transmission to the ssl connection. ]*/
+/* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_043: [ if the ssl send was not able to send an entire enqueued message at once, tlsio_openssl_compact_dowork shall call the ssl again to send the remaining bytes. ]*/
 static SSL_error_pair SSL_WRITE_OK_ERROR_SEQUENCE_impl[] =
 {
     { -1, SSL_ERROR_WANT_READ, false },
@@ -113,8 +113,8 @@ static SSL_error_pair SSL_WRITE_OK_ERROR_SEQUENCE_impl[] =
     { 4, 0, true },		// success
 };
 
-/* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_040: [ The tlsio_openssl_compact_send shall send the first size bytes in buffer to the ssl connection. ]*/
-/* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_043: [ if the ssl was not able to send all data in the buffer, the tlsio_openssl_compact_send shall call the ssl again to send the remaining bytes. ]*/
+/* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_040: [ The tlsio_openssl_compact_send shall enqueue the size bytes in buffer for transmission to the ssl connection. ]*/
+/* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_043: [ if the ssl send was not able to send an entire enqueued message at once, tlsio_openssl_compact_dowork shall call the ssl again to send the remaining bytes. ]*/
 int my_SSL_write(SSL* ssl, uint8_t* buffer, size_t size)
 {
     buffer; // not used
