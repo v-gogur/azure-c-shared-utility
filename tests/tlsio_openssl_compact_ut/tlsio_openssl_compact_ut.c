@@ -52,6 +52,7 @@ static void my_gballoc_free(void* ptr)
 #include "testrunnerswitcher.h"
 #include "umock_c.h"
 #include "umocktypes_charptr.h"
+#include "umocktypes_bool.h"
 #include "umock_c_negative_tests.h"
 #include "azure_c_shared_utility/macro_utils.h"
 #include "azure_c_shared_utility/threadapi.h"
@@ -73,9 +74,34 @@ static void my_gballoc_free(void* ptr)
  */
 #define ENABLE_MOCKS
 #include "azure_c_shared_utility/gballoc.h"
-#include "azure_c_shared_utility/ssl_socket.h"
+#include "azure_c_shared_utility/dns.h"
+#include "azure_c_shared_utility/socket_async.h"
 #include "openssl/ssl.h"
 #undef ENABLE_MOCKS
+
+static int bool_Compare(bool left, bool right)
+{
+    return left != right;
+}
+
+static void bool_ToString(char* string, size_t bufferSize, bool val)
+{
+    (void)bufferSize;
+    (void)strcpy(string, val ? "true" : "false");
+}
+
+#ifndef __cplusplus
+static int _Bool_Compare(_Bool left, _Bool right)
+{
+    return left != right;
+}
+
+static void _Bool_ToString(char* string, size_t bufferSize, _Bool val)
+{
+    (void)bufferSize;
+    (void)strcpy(string, val ? "true" : "false");
+}
+#endif
 
 // These "headers" are actuall source files that are broken out of this file for readability
 #include "callbacks.h"
@@ -133,6 +159,8 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
 
         result = umocktypes_charptr_register_types();
         ASSERT_ARE_EQUAL(int, 0, result);
+        result = umocktypes_bool_register_types();
+        ASSERT_ARE_EQUAL(int, 0, result);
 
         /**
          * It is necessary to identify the types defined on your target. With it, the test system will 
@@ -142,10 +170,13 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
          */
         REGISTER_UMOCK_ALIAS_TYPE(SSL, void*);
         REGISTER_UMOCK_ALIAS_TYPE(SSL_CTX, void*);
+        REGISTER_UMOCK_ALIAS_TYPE(SOCKET_ASYNC_OPTIONS_HANDLE, void*);
+        REGISTER_UMOCK_ALIAS_TYPE(SOCKET_ASYNC_HANDLE, int);
         REGISTER_UMOCK_ALIAS_TYPE(uint32_t, unsigned int);
+        REGISTER_UMOCK_ALIAS_TYPE(uint16_t, unsigned short);
 
-        REGISTER_GLOBAL_MOCK_RETURNS(SSL_Get_IPv4, SSL_Get_IPv4_OK, SSL_Get_IPv4_FAIL);
-        REGISTER_GLOBAL_MOCK_RETURNS(SSL_Socket_Create, SSL_Good_Socket, -1);
+        REGISTER_GLOBAL_MOCK_RETURNS(DNS_Get_IPv4, SSL_Get_IPv4_OK, SSL_Get_IPv4_FAIL);
+        REGISTER_GLOBAL_MOCK_RETURNS(socket_async_create, SSL_Good_Socket, -1);
 
         REGISTER_GLOBAL_MOCK_RETURNS(SSL_new, SSL_Good_Ptr, NULL);
         REGISTER_GLOBAL_MOCK_RETURNS(SSL_CTX_new, SSL_Good_Context_Ptr, NULL);
@@ -238,7 +269,7 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
             //      TP_TLSIO_MALLOC_FAIL
             //
             /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_015:  [ If the IP for the hostName cannot be found, tlsio_openssl_compact_dowork shall call on_io_open_complete with IO_OPEN_ERROR. ]*/
-            TEST_POINT(TP_DNS_FAIL, SSL_Get_IPv4(SSL_goood_host_name));
+            TEST_POINT(TP_DNS_FAIL, DNS_Get_IPv4(SSL_goood_host_name));
             TEST_POINT(TP_TLSIO_MALLOC_FAIL, gballoc_malloc(IGNORED_NUM_ARG));
 
             // Handle options
@@ -260,7 +291,7 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
             //      TP_Open_no_callback_OK
             //      TP_Open_while_still_open_FAIL
             //
-            TEST_POINT(TP_SOCKET_OPEN_FAIL, SSL_Socket_Create(SSL_Get_IPv4_OK, SSL_goood_port_number));
+            TEST_POINT(TP_SOCKET_OPEN_FAIL, socket_async_create(SSL_Get_IPv4_OK, SSL_goood_port_number, false, NULL));
             TEST_POINT(TP_SSL_CTX_new_FAIL, SSL_CTX_new(IGNORED_NUM_ARG));
             TEST_POINT(TP_SSL_new_FAIL, SSL_new(SSL_Good_Context_Ptr));
             TEST_POINT(TP_SSL_set_fd_FAIL, SSL_set_fd(SSL_Good_Ptr, SSL_Good_Socket));
@@ -377,7 +408,7 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
             TEAR_DOWN_POINT(TP_SSL_connect_1_FAIL, SSL_shutdown(SSL_Good_Ptr));
             TEAR_DOWN_POINT(TP_SSL_new_FAIL, SSL_free(SSL_Good_Ptr));
             TEAR_DOWN_POINT(TP_SSL_CTX_new_FAIL, SSL_CTX_free(SSL_Good_Context_Ptr));
-            TEAR_DOWN_POINT(TP_SOCKET_OPEN_FAIL, SSL_Socket_Close(SSL_Good_Socket));
+            TEAR_DOWN_POINT(TP_SOCKET_OPEN_FAIL, socket_async_destroy(SSL_Good_Socket));
 
 
             // The Destroy test points

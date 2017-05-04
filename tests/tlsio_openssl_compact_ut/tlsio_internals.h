@@ -60,7 +60,7 @@ static void ASSERT_TLSIO_NOT_OPEN(CONCRETE_IO_HANDLE tlsio)
     //ASSERT_ARE_EQUAL(int, 0, (int)tlsio_instance->certificate);
     //ASSERT_ARE_EQUAL(int, 0, (int)tlsio_instance->x509certificate);
     //ASSERT_ARE_EQUAL(int, 0, (int)tlsio_instance->x509privatekey);
-    ASSERT_ARE_EQUAL_WITH_MSG(int, SSL_SOCKET_NULL_SOCKET, (int)tlsio_instance->sock, "sock should be SSL_SOCKET_NULL_SOCKET");
+    ASSERT_ARE_EQUAL_WITH_MSG(int, SOCKET_ASYNC_INVALID_SOCKET, (int)tlsio_instance->sock, "sock should be SSL_SOCKET_NULL_SOCKET");
 }
 
 static void ASSERT_TLSIO_NEWLY_CREATED(CONCRETE_IO_HANDLE tlsio)
@@ -88,5 +88,5 @@ static void ASSERT_TLSIO_OPEN(CONCRETE_IO_HANDLE tlsio)
     //ASSERT_ARE_EQUAL(int, 0, (int)tlsio_instance->certificate);
     //ASSERT_ARE_EQUAL(int, 0, (int)tlsio_instance->x509certificate);
     //ASSERT_ARE_EQUAL(int, 0, (int)tlsio_instance->x509privatekey);
-    ASSERT_ARE_NOT_EQUAL_WITH_MSG(int, SSL_SOCKET_NULL_SOCKET, (int)tlsio_instance->sock, "sock should not be SSL_SOCKET_NULL_SOCKET");
+    ASSERT_ARE_NOT_EQUAL_WITH_MSG(int, SOCKET_ASYNC_INVALID_SOCKET, (int)tlsio_instance->sock, "sock should not be SSL_SOCKET_NULL_SOCKET");
 }

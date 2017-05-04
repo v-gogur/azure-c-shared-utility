@@ -59,7 +59,7 @@ typedef struct TLS_IO_INSTANCE_TAG
     SSL_CTX* ssl_context;
     TLSIO_STATE tlsio_state;
     uint32_t host_address;
-    int port;
+    uint16_t port;
     char* certificate;
     const char* x509certificate;
     const char* x509privatekey;
@@ -300,7 +300,7 @@ CONCRETE_IO_HANDLE tlsio_openssl_create(void* io_create_parameters)
                 memset(result, 0, sizeof(TLS_IO_INSTANCE));
                 result->struct_size = sizeof(TLS_IO_INSTANCE);
                 result->host_address = ipV4;
-                result->port = tls_io_config->port;
+                result->port = (uint16_t)tls_io_config->port;
                 result->tlsio_state = TLSIO_STATE_NOT_OPEN;
                 result->sock = SOCKET_ASYNC_INVALID_SOCKET;
             }
