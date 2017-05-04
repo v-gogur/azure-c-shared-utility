@@ -12,7 +12,6 @@
 #include "azure_c_shared_utility/tlsio.h"
 #include "azure_c_shared_utility/xlogging.h"
 #include "azure_c_shared_utility/threadapi.h"
-#include "azure_c_shared_utility/ssl_socket.h"
 #include "azure_c_shared_utility/agenttime.h"
 #include "azure_c_shared_utility/dns.h"
 #include "azure_c_shared_utility/socket_async.h"
@@ -64,7 +63,7 @@ typedef struct TLS_IO_INSTANCE_TAG
     char* certificate;
     const char* x509certificate;
     const char* x509privatekey;
-    int sock;
+    SOCKET_ASYNC_HANDLE sock;
 } TLS_IO_INSTANCE;
 
 static const char* null_tlsio_message = "NULL tlsio";
@@ -97,7 +96,7 @@ static void internal_close(TLS_IO_INSTANCE* tls_io_instance)
     {
         // The underlying socke API does not support waiting for close
         // to complete, so it isn't possible to do so.
-        SSL_Socket_Close(tls_io_instance->sock);
+        socket_async_destroy(tls_io_instance->sock);
         tls_io_instance->sock = -1;
     }
 
@@ -303,7 +302,7 @@ CONCRETE_IO_HANDLE tlsio_openssl_create(void* io_create_parameters)
                 result->host_address = ipV4;
                 result->port = tls_io_config->port;
                 result->tlsio_state = TLSIO_STATE_NOT_OPEN;
-                result->sock = SSL_SOCKET_NULL_SOCKET;
+                result->sock = SOCKET_ASYNC_INVALID_SOCKET;
             }
         }
     }
