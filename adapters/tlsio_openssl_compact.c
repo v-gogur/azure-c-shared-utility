@@ -493,8 +493,8 @@ int tlsio_openssl_open(CONCRETE_IO_HANDLE tls_io,
                         tls_io_instance->on_io_error = on_io_error;
                         tls_io_instance->on_io_error_context = on_io_error_context;
 
-                        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_024: [ The tlsio_openssl_compact_open shall store the provided on_io_error callback function address. ]*/
-                        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_025: [ The tlsio_openssl_compact_open shall store the provided on_io_error_context handle. ]*/
+                        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_077: [ The tlsio_openssl_compact_open shall store the provided on_io_open_complete callback function address. ]*/
+                        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_078: [ The tlsio_openssl_compact_open shall store the provided on_io_open_complete_context handle. ]*/
                         tls_io_instance->on_open_complete = on_io_open_complete;
                         tls_io_instance->on_open_complete_context = on_io_open_complete_context;
 
