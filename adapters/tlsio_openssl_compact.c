@@ -55,7 +55,8 @@ typedef struct PENDING_SOCKET_IO_TAG
 typedef enum TLSIO_STATE_TAG
 {
     TLSIO_STATE_NOT_OPEN,
-    TLSIO_STATE_OPENING_NEED_DNS,
+    TLSIO_STATE_OPENING_BEGIN,
+    TLSIO_STATE_OPENING_WAITING_DNS,
     TLSIO_STATE_OPEN,
     TSLIO_STATE_ERROR,      // Needs to be destroyed and recreated
 } TLSIO_STATE;
@@ -74,7 +75,7 @@ typedef struct TLS_IO_INSTANCE_TAG
     SSL* ssl;
     SSL_CTX* ssl_context;
     TLSIO_STATE tlsio_state;
-    uint32_t host_address;
+    uint32_t host_ipV4_address;
     char* hostname;
     uint16_t port;
     char* certificate;
@@ -146,6 +147,8 @@ static void internal_close(TLS_IO_INSTANCE* tls_io_instance)
     tls_io_instance->on_bytes_received_context = NULL;
     tls_io_instance->on_io_error_context = NULL;
     tls_io_instance->tlsio_state = TLSIO_STATE_NOT_OPEN;
+    tls_io_instance->on_open_complete = NULL;
+    tls_io_instance->on_open_complete_context = NULL;
 }
 
 static void internal_close_with_stored_error_callback(TLS_IO_INSTANCE* tls_io_instance)
@@ -159,6 +162,12 @@ static void internal_close_with_stored_error_callback(TLS_IO_INSTANCE* tls_io_in
     }
 }
 
+static void enter_open_error_state(TLS_IO_INSTANCE* tls_io_instance)
+{
+    tls_io_instance->tlsio_state = TSLIO_STATE_ERROR;
+    // on_open_complete has already been checked for non-NULL
+    tls_io_instance->on_open_complete(tls_io_instance->on_open_complete_context, IO_OPEN_ERROR);
+}
 
 // This method tests for hard errors returned from either SSL_write or SSL_connect.
 // Returns 
@@ -180,20 +189,8 @@ static int create_and_connect_ssl(TLS_IO_INSTANCE* tls_io_instance)
     int result;
     int ret;
 
-    LogInfo("OpenSSL thread start...");
-
-    /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_014: [ The tlsio_openssl_compact_create shall convert the provided hostName to an IPv4 address. ]*/
-    /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_021: [ The tlsio_openssl_compact_open shall begin the process of opening the ssl connection with the host provided in the tlsio_openssl_compact_create call. ]*/
-    uint32_t ipV4 = DNS_Get_IPv4(tls_io_config->hostname);
-    if (ipV4 == 0)
-    {
-        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_015:  [ If the IP for the hostName cannot be found, tlsio_openssl_compact_dowork shall call on_io_open_complete with IO_OPEN_ERROR. ]*/
-        LogInfo("Could not get IPv4 for %s", tls_io_config->hostname);
-        result = NULL;
-    }
-
     //int sock = SSL_Socket_Create(tls_io_instance->host_address, tls_io_instance->port);
-    SOCKET_ASYNC_HANDLE sock = socket_async_create(tls_io_instance->host_address, tls_io_instance->port, false, NULL);
+    SOCKET_ASYNC_HANDLE sock = socket_async_create(tls_io_instance->host_ipV4_address, tls_io_instance->port, false, NULL);
     if (sock < 0)
     {
         // This is a communication interruption rather than a program bug
@@ -310,83 +307,6 @@ static int create_and_connect_ssl(TLS_IO_INSTANCE* tls_io_instance)
     return result;
 }
 
-/* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_009: [ The tlsio_openssl_compact_create shall allocate and initialize all necessary resources and return an instance of the tlsio_openssl_compact. ]*/
-/* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_005: [ The tlsio_openssl_compact shall receive the connection information using the TLSIO_CONFIG structure defined in tlsio.h ]*/
-CONCRETE_IO_HANDLE tlsio_openssl_create(void* io_create_parameters)
-{
-    /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_005: [ The tlsio_openssl_compact shall receive the connection information using the TLSIO_CONFIG structure defined in tlsio.h ]*/
-    /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_012: [ The tlsio_openssl_compact_create shall receive the connection configuration (TLSIO_CONFIG). ]*/
-    TLSIO_CONFIG* tls_io_config = (TLSIO_CONFIG*)io_create_parameters;
-    TLS_IO_INSTANCE* result;
-
-    /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_0073: [ If the hostname member of io_create_parameters value is NULL, tlsio_openssl_compact_create shall log an error and return NULL. ]*/
-    if (io_create_parameters == NULL)
-    {
-        LogError("NULL tls_io_config");
-        result = NULL;
-    }
-    else
-    {
-        if (tls_io_config->hostname == NULL)
-        {
-            LogError("NULL tls_io_config->hostname");
-            result = NULL;
-        }
-        else
-        {
-            if (tls_io_config->port < 0 || tls_io_config->port > MAX_VALID_PORT)
-            {
-                LogError("tls_io_config->port out of range");
-                result = NULL;
-            }
-            else
-            {
-                result = malloc(sizeof(TLS_IO_INSTANCE));
-                if (result == NULL)
-                {
-                    /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_010: [ If any resource allocation fails, tlsio_openssl_compact_create shall return NULL. ]*/
-                    LogError("Failed to allocate tlsio instance");
-                }
-                else
-                {
-                    /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_011: [ The tlsio_openssl_compact_create shall initialize all internal callback pointers as NULL. ]*/
-                    memset(result, 0, sizeof(TLS_IO_INSTANCE));
-                    result->struct_size = sizeof(TLS_IO_INSTANCE);
-                    result->host_address = NULL;
-                    result->port = (uint16_t)tls_io_config->port;
-                    result->tlsio_state = TLSIO_STATE_NOT_OPEN;
-                    result->sock = SOCKET_ASYNC_INVALID_SOCKET;
-                    result->hostname = NULL;
-                    result->pending_io_list = NULL;
-
-                    result->hostname = (char*)malloc(strlen(tls_io_config->hostname) + 1);
-                    if (result->hostname == NULL)
-                    {
-                        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_011: [ The tlsio_openssl_compact_create shall initialize all internal callback pointers as NULL. ]*/
-                        LogError("Failed to allocate tlsio instance");
-                        tlsio_openssl_destroy(result);
-                        result = NULL;
-                    }
-                    else
-                    {
-                        (void)strcpy(result->hostname, tls_io_config->hostname);
-                        result->pending_io_list = singlylinkedlist_create();
-                        if (result->pending_io_list == NULL)
-                        {
-                            /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_011: [ The tlsio_openssl_compact_create shall initialize all internal callback pointers as NULL. ]*/
-                            LogError("Failed singlylinkedlist_create");
-                            tlsio_openssl_destroy(result);
-                            result = NULL;
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    return (CONCRETE_IO_HANDLE)result;
-}
-
 void tlsio_openssl_destroy(CONCRETE_IO_HANDLE tls_io)
 {
     TLS_IO_INSTANCE* tls_io_instance = (TLS_IO_INSTANCE*)tls_io;
@@ -432,6 +352,83 @@ void tlsio_openssl_destroy(CONCRETE_IO_HANDLE tls_io)
 
         free(tls_io_instance);
     }
+}
+
+/* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_009: [ The tlsio_openssl_compact_create shall allocate and initialize all necessary resources and return an instance of the tlsio_openssl_compact. ]*/
+/* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_005: [ The tlsio_openssl_compact shall receive the connection information using the TLSIO_CONFIG structure defined in tlsio.h ]*/
+CONCRETE_IO_HANDLE tlsio_openssl_create(void* io_create_parameters)
+{
+    /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_005: [ The tlsio_openssl_compact shall receive the connection information using the TLSIO_CONFIG structure defined in tlsio.h ]*/
+    /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_012: [ The tlsio_openssl_compact_create shall receive the connection configuration (TLSIO_CONFIG). ]*/
+    TLSIO_CONFIG* tls_io_config = (TLSIO_CONFIG*)io_create_parameters;
+    TLS_IO_INSTANCE* result;
+
+    /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_0073: [ If the hostname member of io_create_parameters value is NULL, tlsio_openssl_compact_create shall log an error and return NULL. ]*/
+    if (io_create_parameters == NULL)
+    {
+        LogError("NULL tls_io_config");
+        result = NULL;
+    }
+    else
+    {
+        if (tls_io_config->hostname == NULL)
+        {
+            LogError("NULL tls_io_config->hostname");
+            result = NULL;
+        }
+        else
+        {
+            if (tls_io_config->port < 0 || tls_io_config->port > MAX_VALID_PORT)
+            {
+                LogError("tls_io_config->port out of range");
+                result = NULL;
+            }
+            else
+            {
+                result = malloc(sizeof(TLS_IO_INSTANCE));
+                if (result == NULL)
+                {
+                    /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_010: [ If any resource allocation fails, tlsio_openssl_compact_create shall return NULL. ]*/
+                    LogError("Failed to allocate tlsio instance");
+                }
+                else
+                {
+                    /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_011: [ The tlsio_openssl_compact_create shall initialize all internal callback pointers as NULL. ]*/
+                    memset(result, 0, sizeof(TLS_IO_INSTANCE));
+                    result->struct_size = sizeof(TLS_IO_INSTANCE);
+                    result->host_ipV4_address = 0;
+                    result->port = (uint16_t)tls_io_config->port;
+                    result->tlsio_state = TLSIO_STATE_NOT_OPEN;
+                    result->sock = SOCKET_ASYNC_INVALID_SOCKET;
+                    result->hostname = NULL;
+                    result->pending_io_list = NULL;
+
+                    result->hostname = (char*)malloc(strlen(tls_io_config->hostname) + 1);
+                    if (result->hostname == NULL)
+                    {
+                        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_011: [ The tlsio_openssl_compact_create shall initialize all internal callback pointers as NULL. ]*/
+                        LogError("Failed to allocate tlsio instance");
+                        tlsio_openssl_destroy(result);
+                        result = NULL;
+                    }
+                    else
+                    {
+                        (void)strcpy(result->hostname, tls_io_config->hostname);
+                        result->pending_io_list = singlylinkedlist_create();
+                        if (result->pending_io_list == NULL)
+                        {
+                            /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_011: [ The tlsio_openssl_compact_create shall initialize all internal callback pointers as NULL. ]*/
+                            LogError("Failed singlylinkedlist_create");
+                            tlsio_openssl_destroy(result);
+                            result = NULL;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    return (CONCRETE_IO_HANDLE)result;
 }
 
 
@@ -500,7 +497,7 @@ int tlsio_openssl_open(CONCRETE_IO_HANDLE tls_io,
 
                         /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_026: [ If tlsio_openssl_compact_open successfully begins opening the ssl connection, it shall return 0. ]*/
                         // All the real work happens in dowork
-                        tls_io_instance->tlsio_state = TLSIO_STATE_OPENING_NEED_DNS;
+                        tls_io_instance->tlsio_state = TLSIO_STATE_OPENING_BEGIN;
                         result = 0;
                     }
                 }
@@ -670,6 +667,75 @@ int tlsio_openssl_send(CONCRETE_IO_HANDLE tls_io, const void* buffer, size_t siz
     return result;
 }
 
+static void dowork_read(TLS_IO_INSTANCE* tls_io_instance)
+{
+    // TRANSFER_BUFFER_SIZE is not very important because if the message is bigger
+    // then the framework just calls dowork repeatedly until it gets everything. So
+    // a bigger buffer would just use memory without buying anything.
+    // Putting this buffer in a small function also allows it to exist on the stack
+    // rather than adding to heap fragmentation.
+    unsigned char buffer[DOWORK_TRANSFER_BUFFER_SIZE];
+    int rcv_bytes;
+
+    // SSL_read is not checked for errors because it never reports anything useful
+    rcv_bytes = SSL_read(tls_io_instance->ssl, buffer, sizeof(buffer));
+    if (rcv_bytes > 0)
+    {
+        // tls_io_instance->on_bytes_received was already checked for NULL
+        // in the call to tlsio_openssl_open
+        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_006: [ The tlsio_openssl_compact shall return the status of all async operations using the callbacks. ]*/
+        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_049: [ If the ssl client is able to provide received data, the tlsio_openssl_compact_dowork shall read this data and call on_bytes_received with the pointer to the buffer containing the data and the number of bytes received. ]*/
+        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_050: [ When tlsio_openssl_compact_dowork calls on_bytes_received, it shall pass the on_bytes_received_context handle as a parameter. ]*/
+        tls_io_instance->on_bytes_received(tls_io_instance->on_bytes_received_context, buffer, rcv_bytes);
+    }
+}
+
+static void dowork_send(TLS_IO_INSTANCE* tls_io_instance)
+{
+    (void)tls_io_instance;
+}
+
+static void dowork_begin_dns(TLS_IO_INSTANCE* tls_io_instance)
+{
+    // Asynchronous DNS is not yet implemented, so this function does nothing interesting
+    tls_io_instance->tlsio_state = TLSIO_STATE_OPENING_WAITING_DNS;
+}
+
+static void dowork_poll_dns(TLS_IO_INSTANCE* tls_io_instance)
+{
+    // DNS_Get_IPv4 is a blocking call, and will get replaced with
+    // an asynchronous version when available.
+
+    /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_014: [ The tlsio_openssl_compact_create shall convert the provided hostName to an IPv4 address. ]*/
+    /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_021: [ The tlsio_openssl_compact_open shall begin the process of opening the ssl connection with the host provided in the tlsio_openssl_compact_create call. ]*/
+    tls_io_instance->host_ipV4_address = DNS_Get_IPv4(tls_io_instance->hostname);
+    if (tls_io_instance->host_ipV4_address == 0)
+    {
+        // Transition to TSLIO_STATE_ERROR
+        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_015:  [ If the IP for the hostName cannot be found, tlsio_openssl_compact_dowork shall call on_io_open_complete with IO_OPEN_ERROR. ]*/
+        LogInfo("Could not get IPv4 for %s", tls_io_instance->hostname);
+        enter_open_error_state(tls_io_instance);
+    }
+    else
+    {
+        // Try to transition to TLSIO_STATE_OPEN
+        LogInfo("create_and_connect_ssl");
+        int result = create_and_connect_ssl(tls_io_instance);
+        if (result != 0)
+        {
+            enter_open_error_state(tls_io_instance);
+        }
+        else
+        {
+            // We're now in TLSIO_STATE_OPEN. We could re-enter dowork, but that
+            // would have a non-trivial cost in writing unit tests, a trivial cost in
+            // stack size, and a negligible improvement in utility, so we won't do it.
+            tls_io_instance->tlsio_state = TLSIO_STATE_OPEN;
+            tls_io_instance->on_open_complete(tls_io_instance->on_open_complete_context, IO_OPEN_OK);
+        }
+    }
+}
+
 /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_004: [ The tlsio_openssl_compact shall call the callbacks functions defined in the xio.h ]*/
 void tlsio_openssl_dowork(CONCRETE_IO_HANDLE tls_io)
 {
@@ -681,25 +747,30 @@ void tlsio_openssl_dowork(CONCRETE_IO_HANDLE tls_io)
     }
     else
     {
-        if (tls_io_instance->tlsio_state == TLSIO_STATE_OPEN)
+        // This switch statement handles all of the state transitions during the opening process
+        switch (tls_io_instance->tlsio_state)
         {
-            // TRANSFER_BUFFER_SIZE is not very important because if the message is bigger
-            // then the framework just calls dowork repeatedly until it gets everything. So
-            // a bigger buffer would just use memory without buying anything.
-            unsigned char buffer[DOWORK_TRANSFER_BUFFER_SIZE];
-            int rcv_bytes;
-
-            // SSL_read is not checked for errors because it never reports anything useful
-            rcv_bytes = SSL_read(tls_io_instance->ssl, buffer, sizeof(buffer));
-            if (rcv_bytes > 0)
-            {
-                // tls_io_instance->on_bytes_received was already checked for NULL
-                // in the call to tlsio_openssl_open
-                /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_006: [ The tlsio_openssl_compact shall return the status of all async operations using the callbacks. ]*/
-                /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_049: [ If the ssl client is able to provide received data, the tlsio_openssl_compact_dowork shall read this data and call on_bytes_received with the pointer to the buffer containing the data and the number of bytes received. ]*/
-                /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_050: [ When tlsio_openssl_compact_dowork calls on_bytes_received, it shall pass the on_bytes_received_context handle as a parameter. ]*/
-                tls_io_instance->on_bytes_received(tls_io_instance->on_bytes_received_context, buffer, rcv_bytes);
-            }
+        case TLSIO_STATE_OPEN:
+            dowork_read(tls_io_instance);
+            dowork_send(tls_io_instance);
+            break;
+        case TLSIO_STATE_NOT_OPEN:
+            // Waiting to be opened, nothing to do
+            break;
+        case TLSIO_STATE_OPENING_BEGIN:
+            LogInfo("dowork_begin_dns");
+            dowork_begin_dns(tls_io_instance);
+            break;
+        case TLSIO_STATE_OPENING_WAITING_DNS:
+            LogInfo("dowork_poll_dns");
+            dowork_poll_dns(tls_io_instance);
+            break;
+        case TSLIO_STATE_ERROR:
+            // There's nothing valid to do here but wait to be destroyed
+            break;
+        default:
+            LogError("Unrecoverable program bug: unexpected internal tlsio state");
+            break;
         }
     }
 }
