@@ -29,9 +29,9 @@ typedef struct PENDING_SOCKET_IO_TAG
 // It is not anticipated that there should ever be a need to modify the
 // SSL_MAX_BLOCK_TIME_SECONDS value, but if there is then it can be
 // overridded with a preprocessor #define
-#ifndef SSL_MAX_BLOCK_TIME_SECONDS
-#define SSL_MAX_BLOCK_TIME_SECONDS 20
-#endif // !SSL_MAX_BLOCK_TIME_SECONDS
+#ifndef TLSIO_OPEN_TIMEOUT_SECONDS
+#define TLSIO_OPEN_TIMEOUT_SECONDS 20
+#endif // !TLSIO_OPEN_TIMEOUT_SECONDS
 
 #define MAX_VALID_PORT 0xffff
 
@@ -58,6 +58,7 @@ typedef enum TLSIO_STATE_TAG
     TLSIO_STATE_OPENING_BEGIN,
     TLSIO_STATE_OPENING_WAITING_DNS,
     TLSIO_STATE_OPENING_WAITING_SOCKET,
+    TLSIO_STATE_OPENING_WAITING_SSL,
     TLSIO_STATE_OPEN,
     TSLIO_STATE_ERROR,      // Needs to be destroyed and recreated
 } TLSIO_STATE;
@@ -79,6 +80,7 @@ typedef struct TLS_IO_INSTANCE_TAG
     uint32_t host_ipV4_address;
     char* hostname;
     uint16_t port;
+    time_t open_timeout_end_time;
     char* certificate;
     const char* x509certificate;
     const char* x509privatekey;
@@ -185,110 +187,75 @@ static int is_hard_ssl_error(SSL* ssl, int callReturn)
 }
 
 
-static int create_and_connect_ssl(TLS_IO_INSTANCE* tls_io_instance)
+static int connect_ssl(TLS_IO_INSTANCE* tls_io_instance)
 {
     int result;
-    int ret;
 
+    // https://www.openssl.org/docs/man1.0.2/ssl/SSL_connect.html
+
+    // "If the underlying BIO is non - blocking, SSL_connect() will also 
+    // return when the underlying BIO could not satisfy the needs of 
+    // SSL_connect() to continue the handshake, indicating the 
+    // problem by the return value -1. In this case a call to 
+    // SSL_get_error() with the return value of SSL_connect() will 
+    // yield SSL_ERROR_WANT_READ or SSL_ERROR_WANT_WRITE.The calling 
+    // process then must repeat the call after taking appropriate 
+    // action to satisfy the needs of SSL_connect().The action 
+    // depends on the underlying BIO. When using a non - blocking 
+    // socket, nothing is to be done, but select() can be used to 
+    // check for the required condition."
+
+    bool done = false;
+    // This result setting here is necessary because the compiler does
+    // not recognize that the while loop will always execute, and so it
+    // puts up an uninitialized variable warning.
+    result = __FAILURE__;
+
+    // 
+    while (!done)
     {
-        tls_io_instance->ssl_context = SSL_CTX_new(TLSv1_2_client_method());
-        if (tls_io_instance->ssl_context == NULL)
+        int connect_result = SSL_connect(tls_io_instance->ssl);
+
+        // The following note applies to the Espressif ESP32 implementation
+        // of OpenSSL:
+        // The manual pages seem to be incorrect. They say that 0 is a failure,
+        // but by experiment, 0 is the success result, at least when using
+        // SSL_set_fd instead of custom BIO.
+        // https://www.openssl.org/docs/man1.0.2/ssl/SSL_connect.html
+        if (connect_result == 1 || connect_result == 0)
         {
-            /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_030: [ If tlsio_openssl_compact_dowork fails to open the ssl connection it shall call on_io_open_complete with IO_OPEN_ERROR. ]*/
-            result = __FAILURE__;
-            LogError("create new SSL CTX failed");
+            // Connect succeeded
+            done = true;
+            result = 0;
+            tls_io_instance->tlsio_state = TLSIO_STATE_OPEN;
         }
         else
         {
-            tls_io_instance->ssl = SSL_new(tls_io_instance->ssl_context);
-            if (tls_io_instance->ssl == NULL)
+            int hard_error = is_hard_ssl_error(tls_io_instance->ssl, connect_result);
+            if (hard_error != 0)
             {
-                /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_030: [ If tlsio_openssl_compact_dowork fails to open the ssl connection and the on_io_open_complete callback was provided, it shall call on_io_open_complete with IO_OPEN_ERROR. ]*/
+                // Connect failed, so delete the connection objects
+                /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_030: [ If tlsio_openssl_compact_dowork fails to open the ssl connection it shall call on_io_open_complete with IO_OPEN_ERROR. ]*/
                 result = __FAILURE__;
-                LogError("SSL_new failed");
+                done = true;
+                LogInfo("Hard error from SSL_connect: %d", hard_error);
             }
             else
             {
-                // returns 1 on success
-                ret = SSL_set_fd(tls_io_instance->ssl, tls_io_instance->sock);
-                if (ret != 1)
+                time_t now = get_time(NULL);
+                if (now > tls_io_instance->open_timeout_end_time)
                 {
+                    /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_074: [ The tlsio_openssl_compact_send shall spend no longer than the internally defined SSL_MAX_BLOCK_TIME_SECONDS (20 seconds) attempting to perform the SSL_connect operation. ]*/
                     /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_030: [ If tlsio_openssl_compact_dowork fails to open the ssl connection it shall call on_io_open_complete with IO_OPEN_ERROR. ]*/
+                    // This has taken too long, so bail out
                     result = __FAILURE__;
-                    LogError("SSL_set_fd failed");
-                }
-                else
-                {
-                    // https://www.openssl.org/docs/man1.0.2/ssl/SSL_connect.html
-
-                    // "If the underlying BIO is non - blocking, SSL_connect() will also 
-                    // return when the underlying BIO could not satisfy the needs of 
-                    // SSL_connect() to continue the handshake, indicating the 
-                    // problem by the return value -1. In this case a call to 
-                    // SSL_get_error() with the return value of SSL_connect() will 
-                    // yield SSL_ERROR_WANT_READ or SSL_ERROR_WANT_WRITE.The calling 
-                    // process then must repeat the call after taking appropriate 
-                    // action to satisfy the needs of SSL_connect().The action 
-                    // depends on the underlying BIO. When using a non - blocking 
-                    // socket, nothing is to be done, but select() can be used to 
-                    // check for the required condition."
-
-                    bool done = false;
-                    // This result setting here is necessary because the compiler does
-                    // not recognize that the while loop will always execute, and so it
-                    // puts up an uninitialized variable warning.
-                    result = __FAILURE__;
-
-                    // 
-                    time_t end_time = get_time(NULL) + SSL_MAX_BLOCK_TIME_SECONDS;
-                    while (!done)
-                    {
-                        int connect_result = SSL_connect(tls_io_instance->ssl);
-
-                        // The following note applies to the Espressif ESP32 implementation
-                        // of OpenSSL:
-                        // The manual pages seem to be incorrect. They say that 0 is a failure,
-                        // but by experiment, 0 is the success result, at least when using
-                        // SSL_set_fd instead of custom BIO.
-                        // https://www.openssl.org/docs/man1.0.2/ssl/SSL_connect.html
-                        if (connect_result == 1 || connect_result == 0)
-                        {
-                            // Connect succeeded
-                            done = true;
-                            result = 0;
-                            tls_io_instance->tlsio_state = TLSIO_STATE_OPEN;
-                        }
-                        else
-                        {
-                            int hard_error = is_hard_ssl_error(tls_io_instance->ssl, connect_result);
-                            if (hard_error != 0)
-                            {
-                                // Connect failed, so delete the connection objects
-                                /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_030: [ If tlsio_openssl_compact_dowork fails to open the ssl connection it shall call on_io_open_complete with IO_OPEN_ERROR. ]*/
-                                result = __FAILURE__;
-                                done = true;
-                                LogInfo("Hard error from SSL_connect: %d", hard_error);
-                            }
-                            else
-                            {
-                                time_t now = get_time(NULL);
-                                if (now > end_time)
-                                {
-                                    /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_074: [ The tlsio_openssl_compact_send shall spend no longer than the internally defined SSL_MAX_BLOCK_TIME_SECONDS (20 seconds) attempting to perform the SSL_connect operation. ]*/
-                                    /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_030: [ If tlsio_openssl_compact_dowork fails to open the ssl connection it shall call on_io_open_complete with IO_OPEN_ERROR. ]*/
-                                    // This has taken too long, so bail out
-                                    result = __FAILURE__;
-                                    done = true;
-                                    LogInfo("Timeout from SSL_connect");
-                                }
-                            }
-                        }
-
-                        ThreadAPI_Sleep(SSL_MESSAGE_PUMP_DELAY_MILLISECONDS);
-                    }
+                    done = true;
+                    LogInfo("Timeout from SSL_connect");
                 }
             }
         }
+
+        ThreadAPI_Sleep(SSL_MESSAGE_PUMP_DELAY_MILLISECONDS);
     }
 
     return result;
@@ -425,6 +392,7 @@ int tlsio_openssl_open(CONCRETE_IO_HANDLE tls_io,
     ON_BYTES_RECEIVED on_bytes_received, void* on_bytes_received_context,
     ON_IO_ERROR on_io_error, void* on_io_error_context)
 {
+
     int result;
     TLS_IO_INSTANCE* tls_io_instance = (TLS_IO_INSTANCE*)tls_io;
     if (tls_io == NULL)
@@ -435,6 +403,7 @@ int tlsio_openssl_open(CONCRETE_IO_HANDLE tls_io,
     }
     else
     {
+        tls_io_instance->open_timeout_end_time = get_time(NULL) + TLSIO_OPEN_TIMEOUT_SECONDS;
         if (on_io_open_complete == NULL)
         {
             /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_074: [ If the on_io_open_complete parameter is NULL, tlsio_openssl_compact_open shall log an error and return FAILURE. ]*/
@@ -589,7 +558,7 @@ int tlsio_openssl_send(CONCRETE_IO_HANDLE tls_io, const void* buffer, size_t siz
                 /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_040: [ The tlsio_openssl_compact_send shall enqueue the size bytes in buffer for transmission to the ssl connection. ]*/
                 /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_043: [ if the ssl send was not able to send an entire enqueued message at once, tlsio_openssl_compact_dowork shall call the ssl again to send the remaining bytes. ]*/
                 /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_047: [ If an enqueued message size is 0, the tlsio_openssl_compact_dowork shall just call the on_send_complete with IO_SEND_OK. ]*/
-                time_t end_time = get_time(NULL) + SSL_MAX_BLOCK_TIME_SECONDS;
+                time_t end_time = get_time(NULL) + TLSIO_OPEN_TIMEOUT_SECONDS;
                 while (size > 0)
                 {
                     res = SSL_write(tls_io_instance->ssl, ((uint8_t*)buffer) + total_written, size);
@@ -677,6 +646,51 @@ static void dowork_read(TLS_IO_INSTANCE* tls_io_instance)
     }
 }
 
+
+static int create_ssl(TLS_IO_INSTANCE* tls_io_instance)
+{
+    int result;
+    int ret;
+
+    {
+        tls_io_instance->ssl_context = SSL_CTX_new(TLSv1_2_client_method());
+        if (tls_io_instance->ssl_context == NULL)
+        {
+            /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_030: [ If tlsio_openssl_compact_dowork fails to open the ssl connection it shall call on_io_open_complete with IO_OPEN_ERROR. ]*/
+            result = __FAILURE__;
+            LogError("create new SSL CTX failed");
+        }
+        else
+        {
+            tls_io_instance->ssl = SSL_new(tls_io_instance->ssl_context);
+            if (tls_io_instance->ssl == NULL)
+            {
+                /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_030: [ If tlsio_openssl_compact_dowork fails to open the ssl connection and the on_io_open_complete callback was provided, it shall call on_io_open_complete with IO_OPEN_ERROR. ]*/
+                result = __FAILURE__;
+                LogError("SSL_new failed");
+            }
+            else
+            {
+                // returns 1 on success
+                ret = SSL_set_fd(tls_io_instance->ssl, tls_io_instance->sock);
+                if (ret != 1)
+                {
+                    /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_030: [ If tlsio_openssl_compact_dowork fails to open the ssl connection it shall call on_io_open_complete with IO_OPEN_ERROR. ]*/
+                    result = __FAILURE__;
+                    LogError("SSL_set_fd failed");
+                }
+                else
+                {
+                    result = 0;
+                }
+            }
+        }
+    }
+
+    return result;
+}
+
+
 static void dowork_send(TLS_IO_INSTANCE* tls_io_instance)
 {
     (void)tls_io_instance;
@@ -737,9 +751,40 @@ static void dowork_poll_socket(TLS_IO_INSTANCE* tls_io_instance)
     {
         if (is_complete)
         {
+            // Attempt to transition to TLSIO_STATE_OPENING_WAITING_SSL
+            int create_ssl_result = create_ssl(tls_io_instance);
+            if (create_ssl_result != 0)
+            {
+                // Transition to TSLIO_STATE_ERROR
+                // create_ssl already did error logging
+                enter_open_error_state(tls_io_instance);
+            }
+            else
+            {
+                tls_io_instance->tlsio_state = TLSIO_STATE_OPENING_WAITING_SSL;
+            }
+        }
+        // If not is_complete, just keep waiting
+    }
+}
+
+static void dowork_poll_open_ssl_XXXXXXXX(TLS_IO_INSTANCE* tls_io_instance)
+{
+    bool is_complete;
+    int result = socket_async_is_create_complete(tls_io_instance->sock, &is_complete);
+    if (result != 0)
+    {
+        // Transition to TSLIO_STATE_ERROR
+        LogInfo("socket_async_is_create_complete failure");
+        enter_open_error_state(tls_io_instance);
+    }
+    else
+    {
+        if (is_complete)
+        {
             // Try to transition to TLSIO_STATE_OPEN
             LogInfo("create_and_connect_ssl");
-            int create_and_connect_ssl_result = create_and_connect_ssl(tls_io_instance);
+            int create_and_connect_ssl_result = connect_ssl(tls_io_instance);
             if (create_and_connect_ssl_result != 0)
             {
                 enter_open_error_state(tls_io_instance);
@@ -754,6 +799,25 @@ static void dowork_poll_socket(TLS_IO_INSTANCE* tls_io_instance)
             }
         }
         // If not is_complete, just keep waiting
+    }
+}
+
+static void dowork_poll_open_ssl(TLS_IO_INSTANCE* tls_io_instance)
+{
+    // Try to transition to TLSIO_STATE_OPEN
+    LogInfo("connect_ssl");
+    int create_and_connect_ssl_result = connect_ssl(tls_io_instance);
+    if (create_and_connect_ssl_result != 0)
+    {
+        enter_open_error_state(tls_io_instance);
+    }
+    else
+    {
+        // We're now in TLSIO_STATE_OPEN. We could re-enter dowork, but that
+        // would have a non-trivial cost in writing unit tests, a trivial cost in
+        // stack size, and a negligible improvement in utility, so we won't do it.
+        tls_io_instance->tlsio_state = TLSIO_STATE_OPEN;
+        tls_io_instance->on_open_complete(tls_io_instance->on_open_complete_context, IO_OPEN_OK);
     }
 }
 
@@ -785,6 +849,10 @@ void tlsio_openssl_dowork(CONCRETE_IO_HANDLE tls_io)
         case TLSIO_STATE_OPENING_WAITING_SOCKET:
             LogInfo("dowork_poll_socket");
             dowork_poll_socket(tls_io_instance);
+            break;
+        case TLSIO_STATE_OPENING_WAITING_SSL:
+            LogInfo("dowork_poll_socket");
+            dowork_poll_open_ssl(tls_io_instance);
             break;
         case TLSIO_STATE_OPEN:
             dowork_read(tls_io_instance);
