@@ -21,17 +21,26 @@ typedef struct PENDING_SOCKET_IO_TAG
 {
     unsigned char* bytes;
     size_t size;
+    size_t unsent_size;
     ON_SEND_COMPLETE on_send_complete;
     void* callback_context;
+    time_t send_timeout_end_time;
     SINGLYLINKEDLIST_HANDLE pending_io_list;
 } PENDING_SOCKET_IO;
 
 // It is not anticipated that there should ever be a need to modify the
 // SSL_MAX_BLOCK_TIME_SECONDS value, but if there is then it can be
-// overridded with a preprocessor #define
+// overridden with a preprocessor #define
 #ifndef TLSIO_OPEN_TIMEOUT_SECONDS
-#define TLSIO_OPEN_TIMEOUT_SECONDS 20
+#define TLSIO_OPEN_TIMEOUT_SECONDS 30
 #endif // !TLSIO_OPEN_TIMEOUT_SECONDS
+
+// It is not anticipated that there should ever be a need to modify the
+// SSL_MAX_BLOCK_TIME_SECONDS value, but if there is then it can be
+// overridden with a preprocessor #define
+#ifndef TLSIO_MSG_SEND_TIMEOUT_SECONDS
+#define TLSIO_MSG_SEND_TIMEOUT_SECONDS 30
+#endif // !TLSIO_MSG_SEND_TIMEOUT_SECONDS
 
 #define MAX_VALID_PORT 0xffff
 
@@ -56,7 +65,7 @@ typedef enum TLSIO_STATE_TAG
     TLSIO_STATE_OPENING_WAITING_SOCKET,
     TLSIO_STATE_OPENING_WAITING_SSL,
     TLSIO_STATE_OPEN,
-    TSLIO_STATE_ERROR,      // Needs to be destroyed and recreated
+    TLSIO_STATE_ERROR,      // Needs to be destroyed and recreated
 } TLSIO_STATE;
 
 // This structure definition is mirrored in the unit tests, so if you change
@@ -84,7 +93,63 @@ typedef struct TLS_IO_INSTANCE_TAG
     SINGLYLINKEDLIST_HANDLE pending_io_list;
 } TLS_IO_INSTANCE;
 
+#ifndef NO_LOGGING
 static const char* null_tlsio_message = "NULL tlsio";
+static const char* allocate_fail_message = "malloc failed";
+#endif
+
+// Return true if a message was available to remove
+static bool close_and_destroy_head_message(TLS_IO_INSTANCE* tls_io_instance, IO_SEND_RESULT send_result)
+{
+    bool result;
+    if (send_result == IO_SEND_ERROR)
+    {
+        tls_io_instance->tlsio_state = TLSIO_STATE_ERROR;
+    }
+    LIST_ITEM_HANDLE head_pending_io = singlylinkedlist_get_head_item(tls_io_instance->pending_io_list);
+    if (head_pending_io != NULL)
+    {
+        PENDING_SOCKET_IO* head_message = (PENDING_SOCKET_IO*)singlylinkedlist_item_get_value(head_pending_io);
+        // on_send_complete is checked for NULL during PENDING_SOCKET_IO creation
+        head_message->on_send_complete(head_message->callback_context, send_result);
+
+        free(head_message->bytes);
+        free(head_message);
+        if (singlylinkedlist_remove(tls_io_instance->pending_io_list, head_pending_io) != 0)
+        {
+            tls_io_instance->tlsio_state = TLSIO_STATE_ERROR;
+            // on_io_error is checked for NULL during tlsio_openssl_create
+            tls_io_instance->on_io_error(tls_io_instance->on_io_error_context);
+            LogError("Program bug: unable to remove socket from list");
+        }
+        result = true;
+    }
+    else
+    {
+        result = false;
+    }
+    return result;
+}
+
+static void enter_open_error_state(TLS_IO_INSTANCE* tls_io_instance)
+{
+    tls_io_instance->tlsio_state = TLSIO_STATE_ERROR;
+    // on_open_complete has already been checked for non-NULL
+    tls_io_instance->on_open_complete(tls_io_instance->on_open_complete_context, IO_OPEN_ERROR);
+}
+
+static void check_for_open_timeout(TLS_IO_INSTANCE* tls_io_instance)
+{
+    time_t now = get_time(NULL);
+    if (now > tls_io_instance->open_timeout_end_time)
+    {
+        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_074: [ The tlsio_openssl_compact_send shall spend no longer than the internally defined SSL_MAX_BLOCK_TIME_SECONDS (20 seconds) attempting to perform the SSL_connect operation. ]*/
+        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_030: [ If tlsio_openssl_compact_dowork fails to open the ssl connection it shall call on_io_open_complete with IO_OPEN_ERROR. ]*/
+        // This has taken too long, so bail out
+        LogInfo("Timeout while opening tlsio");
+        enter_open_error_state(tls_io_instance);
+    }
+}
 
 static void internal_close(TLS_IO_INSTANCE* tls_io_instance)
 {
@@ -122,25 +187,10 @@ static void internal_close(TLS_IO_INSTANCE* tls_io_instance)
         socket_async_destroy(tls_io_instance->sock);
         tls_io_instance->sock = -1;
     }
-    if (tls_io_instance->pending_io_list != NULL)
-    {
-        /* clear all pending IOs */
-        LIST_ITEM_HANDLE first_pending_io = singlylinkedlist_get_head_item(tls_io_instance->pending_io_list);
-        while (first_pending_io != NULL)
-        {
-            PENDING_SOCKET_IO* pending_socket_io = (PENDING_SOCKET_IO*)singlylinkedlist_item_get_value(first_pending_io);
-            if (pending_socket_io != NULL)
-            {
-                pending_socket_io->on_send_complete(pending_socket_io->callback_context, IO_SEND_CANCELLED);
-                free(pending_socket_io->bytes);
-                free(pending_socket_io);
-            }
 
-            (void)singlylinkedlist_remove(tls_io_instance->pending_io_list, first_pending_io);
-            first_pending_io = singlylinkedlist_get_head_item(tls_io_instance->pending_io_list);
-        }
-        // singlylinkedlist_destroy gets called in the main destroy
-    }
+    /* clear all pending IOs */
+    while (close_and_destroy_head_message(tls_io_instance, IO_SEND_CANCELLED));
+    // singlylinkedlist_destroy gets called in the main destroy
 
     tls_io_instance->on_bytes_received = NULL;
     tls_io_instance->on_io_error = NULL;
@@ -149,38 +199,6 @@ static void internal_close(TLS_IO_INSTANCE* tls_io_instance)
     tls_io_instance->tlsio_state = TLSIO_STATE_NOT_OPEN;
     tls_io_instance->on_open_complete = NULL;
     tls_io_instance->on_open_complete_context = NULL;
-}
-
-static void internal_close_with_stored_error_callback(TLS_IO_INSTANCE* tls_io_instance)
-{
-    ON_IO_ERROR callback = tls_io_instance->on_io_error;
-    void* context = tls_io_instance->on_io_error_context;
-    internal_close(tls_io_instance);
-    if (callback != NULL)
-    {
-        callback(context);
-    }
-}
-
-static void enter_open_error_state(TLS_IO_INSTANCE* tls_io_instance)
-{
-    tls_io_instance->tlsio_state = TSLIO_STATE_ERROR;
-    // on_open_complete has already been checked for non-NULL
-    tls_io_instance->on_open_complete(tls_io_instance->on_open_complete_context, IO_OPEN_ERROR);
-}
-
-static void check_for_open_timeout(TLS_IO_INSTANCE* tls_io_instance)
-{
-    time_t now = get_time(NULL);
-    if (now > tls_io_instance->open_timeout_end_time)
-    {
-        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_074: [ The tlsio_openssl_compact_send shall spend no longer than the internally defined SSL_MAX_BLOCK_TIME_SECONDS (20 seconds) attempting to perform the SSL_connect operation. ]*/
-        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_030: [ If tlsio_openssl_compact_dowork fails to open the ssl connection it shall call on_io_open_complete with IO_OPEN_ERROR. ]*/
-        // This has taken too long, so bail out
-        LogInfo("Timeout while opening tlsio");
-        enter_open_error_state(tls_io_instance);
-    }
-
 }
 
 // This method tests for hard errors returned from either SSL_write or SSL_connect.
@@ -194,81 +212,6 @@ static int is_hard_ssl_error(SSL* ssl, int callReturn)
     {
         result = 0;
     }
-    return result;
-}
-
-
-static int connect_ssl(TLS_IO_INSTANCE* tls_io_instance)
-{
-    int result;
-
-    // https://www.openssl.org/docs/man1.0.2/ssl/SSL_connect.html
-
-    // "If the underlying BIO is non - blocking, SSL_connect() will also 
-    // return when the underlying BIO could not satisfy the needs of 
-    // SSL_connect() to continue the handshake, indicating the 
-    // problem by the return value -1. In this case a call to 
-    // SSL_get_error() with the return value of SSL_connect() will 
-    // yield SSL_ERROR_WANT_READ or SSL_ERROR_WANT_WRITE.The calling 
-    // process then must repeat the call after taking appropriate 
-    // action to satisfy the needs of SSL_connect().The action 
-    // depends on the underlying BIO. When using a non - blocking 
-    // socket, nothing is to be done, but select() can be used to 
-    // check for the required condition."
-
-    bool done = false;
-    // This result setting here is necessary because the compiler does
-    // not recognize that the while loop will always execute, and so it
-    // puts up an uninitialized variable warning.
-    result = __FAILURE__;
-
-    // 
-    while (!done)
-    {
-        int connect_result = SSL_connect(tls_io_instance->ssl);
-
-        // The following note applies to the Espressif ESP32 implementation
-        // of OpenSSL:
-        // The manual pages seem to be incorrect. They say that 0 is a failure,
-        // but by experiment, 0 is the success result, at least when using
-        // SSL_set_fd instead of custom BIO.
-        // https://www.openssl.org/docs/man1.0.2/ssl/SSL_connect.html
-        if (connect_result == 1 || connect_result == 0)
-        {
-            // Connect succeeded
-            done = true;
-            result = 0;
-            tls_io_instance->tlsio_state = TLSIO_STATE_OPEN;
-        }
-        else
-        {
-            int hard_error = is_hard_ssl_error(tls_io_instance->ssl, connect_result);
-            if (hard_error != 0)
-            {
-                // Connect failed, so delete the connection objects
-                /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_030: [ If tlsio_openssl_compact_dowork fails to open the ssl connection it shall call on_io_open_complete with IO_OPEN_ERROR. ]*/
-                result = __FAILURE__;
-                done = true;
-                LogInfo("Hard error from SSL_connect: %d", hard_error);
-            }
-            else
-            {
-                time_t now = get_time(NULL);
-                if (now > tls_io_instance->open_timeout_end_time)
-                {
-                    /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_074: [ The tlsio_openssl_compact_send shall spend no longer than the internally defined SSL_MAX_BLOCK_TIME_SECONDS (20 seconds) attempting to perform the SSL_connect operation. ]*/
-                    /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_030: [ If tlsio_openssl_compact_dowork fails to open the ssl connection it shall call on_io_open_complete with IO_OPEN_ERROR. ]*/
-                    // This has taken too long, so bail out
-                    result = __FAILURE__;
-                    done = true;
-                    LogInfo("Timeout from SSL_connect");
-                }
-            }
-        }
-
-        ThreadAPI_Sleep(1);
-    }
-
     return result;
 }
 
@@ -354,7 +297,7 @@ CONCRETE_IO_HANDLE tlsio_openssl_create(void* io_create_parameters)
                 if (result == NULL)
                 {
                     /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_010: [ If any resource allocation fails, tlsio_openssl_compact_create shall return NULL. ]*/
-                    LogError("Failed to allocate tlsio instance");
+                    LogError(allocate_fail_message);
                 }
                 else
                 {
@@ -372,7 +315,7 @@ CONCRETE_IO_HANDLE tlsio_openssl_create(void* io_create_parameters)
                     if (result->hostname == NULL)
                     {
                         /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_011: [ The tlsio_openssl_compact_create shall initialize all internal callback pointers as NULL. ]*/
-                        LogError("Failed to allocate tlsio instance");
+                        LogError(allocate_fail_message);
                         tlsio_openssl_destroy(result);
                         result = NULL;
                     }
@@ -529,10 +472,7 @@ int tlsio_openssl_close(CONCRETE_IO_HANDLE tls_io, ON_IO_CLOSE_COMPLETE on_io_cl
 /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_004: [ The tlsio_openssl_compact shall call the callbacks functions defined in the xio.h ]*/
 int tlsio_openssl_send(CONCRETE_IO_HANDLE tls_io, const void* buffer, size_t size, ON_SEND_COMPLETE on_send_complete, void* callback_context)
 {
-    IO_SEND_RESULT send_result_for_send_complete_callback = IO_SEND_ERROR;
     int result;
-    size_t bytes_to_send = size;
-
     TLS_IO_INSTANCE* tls_io_instance = (TLS_IO_INSTANCE*)tls_io;
     if (tls_io_instance == NULL)
     {
@@ -541,95 +481,86 @@ int tlsio_openssl_send(CONCRETE_IO_HANDLE tls_io, const void* buffer, size_t siz
         LogError(null_tlsio_message);
     }
     else
-
-
-        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_075: [ If the on_send_complete is NULL, tlsio_openssl_compact_send shall log the error and return FAILURE. ]*/
-
-
     {
-        if (buffer == NULL)
+        if (on_send_complete == NULL)
         {
-            /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_046: [ If the buffer is NULL, the tlsio_openssl_compact_send shall log the error and return FAILURE. ]*/
+            /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_075: [ If the on_send_complete is NULL, tlsio_openssl_compact_send shall log the error and return FAILURE. ]*/
             result = __FAILURE__;
-            LogError("NULL buffer.");
+            LogError("NULL on_send_complete");
         }
         else
         {
-            if (tls_io_instance->tlsio_state == TLSIO_STATE_NOT_OPEN)
+            if (buffer == NULL)
             {
-                /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_072: [ If tlsio_openssl_compact_open has not been called or the opening process has not been completed, tlsio_openssl_compact_send shall log an error and return FAILURE. ]*/
+                /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_046: [ If the buffer is NULL, the tlsio_openssl_compact_send shall log the error and return FAILURE. ]*/
                 result = __FAILURE__;
-                LogError("Attempted tlsio_openssl_send without a prior successful open call.");
+                LogError("NULL buffer.");
             }
             else
             {
-                size_t total_written = 0;
-                int res = 0;
-
-                /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_040: [ The tlsio_openssl_compact_send shall enqueue the size bytes in buffer for transmission to the ssl connection. ]*/
-                /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_043: [ if the ssl send was not able to send an entire enqueued message at once, tlsio_openssl_compact_dowork shall call the ssl again to send the remaining bytes. ]*/
-                /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_047: [ If an enqueued message size is 0, the tlsio_openssl_compact_dowork shall just call the on_send_complete with IO_SEND_OK. ]*/
-                time_t end_time = get_time(NULL) + TLSIO_OPEN_TIMEOUT_SECONDS;
-                while (size > 0)
+                if (tls_io_instance->tlsio_state != TLSIO_STATE_OPEN)
                 {
-                    res = SSL_write(tls_io_instance->ssl, ((uint8_t*)buffer) + total_written, size);
-                    // https://wiki.openssl.org/index.php/Manual:SSL_write(3)
-
-                    if (res > 0)
-                    {
-                        total_written += res;
-                        size = size - res;
-                    }
-                    else
-                    {
-                        // SSL_write returned non-success. It may just be busy, or it may be broken.
-                        int hard_error = is_hard_ssl_error(tls_io_instance->ssl, res);
-                        if (hard_error != 0)
-                        {
-                            // This is an unexpected error, and we need to bail out.
-                            LogInfo("Error from SSL_write: %d", hard_error);
-                            break;
-                        }
-                        else
-                        {
-                            time_t now = get_time(NULL);
-                            if (now > end_time)
-                            {
-                                /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_073: [ The tlsio_openssl_compact_send shall spend no longer than the internally defined SSL_MAX_BLOCK_TIME_SECONDS (20 seconds) attempting to perform the SSL_write operation. ]*/
-                                // This has taken too long, so bail out
-                                LogInfo("Timeout from SSL_connect");
-                                break;
-                            }
-                        }
-                    }
-                    // Try again real soon
-                    ThreadAPI_Sleep(10);
-                }
-
-                if (total_written == bytes_to_send)
-                {
-                    /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_045: [ If the ssl was able to send all the bytes in an enqueued message, the tlsio_openssl_compact_dowork shall call the on_send_complete with IO_SEND_OK. ]*/
-                    send_result_for_send_complete_callback = IO_SEND_OK;
-                    result = 0;
+                    /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_072: [ If tlsio_openssl_compact_open has not been called or the opening process has not been completed, tlsio_openssl_compact_send shall log an error and return FAILURE. ]*/
+                    result = __FAILURE__;
+                    LogError("tlsio_openssl_send without a prior successful open.");
                 }
                 else
                 {
-                    /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_044: [ If the ssl fails before sending all of the bytes in an enqueued message, the tlsio_openssl_compact_dowork shall call the on_send_complete with IO_SEND_ERROR. ]*/
-                    /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_070: [ if the supplied message cannot be enqueued for transmission, tlsio_openssl_compact_send shall call the on_send_complete with IO_SEND_ERROR, and return FAILURE. ]*/
-                    result = __FAILURE__;
-                    internal_close_with_stored_error_callback(tls_io_instance);
+                    PENDING_SOCKET_IO* pending_socket_io = (PENDING_SOCKET_IO*)malloc(sizeof(PENDING_SOCKET_IO));
+                    if (pending_socket_io == NULL)
+                    {
+                        result = __FAILURE__;
+                        LogError(allocate_fail_message);
+                    }
+                    else
+                    {
+                        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_040: [ The tlsio_openssl_compact_send shall enqueue the size bytes in buffer for transmission to the ssl connection. ]*/
+                        // Accept messages of length zero, but don't allocate memory for them
+                        if (size > 0)
+                        {
+                            pending_socket_io->bytes = (unsigned char*)malloc(size);
+                        }
+                        else
+                        {
+                            pending_socket_io->bytes = NULL;
+                        }
+
+                        if (pending_socket_io->bytes == NULL && size > 0)
+                        {
+                            /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_070: [ if the supplied message cannot be enqueued for transmission, tlsio_openssl_compact_send shall call the on_send_complete with IO_SEND_ERROR, and return FAILURE. ]*/
+                            LogError(allocate_fail_message);
+                            free(pending_socket_io);
+                            result = __FAILURE__;
+                        }
+                        else
+                        {
+                            pending_socket_io->size = size;
+                            pending_socket_io->unsent_size = size;
+                            pending_socket_io->on_send_complete = on_send_complete;
+                            pending_socket_io->callback_context = callback_context;
+                            pending_socket_io->pending_io_list = tls_io_instance->pending_io_list;
+                            if (size > 0)
+                            {
+                                (void)memcpy(pending_socket_io->bytes, buffer, size);
+                            }
+                            pending_socket_io->send_timeout_end_time = 0;
+
+                            if (singlylinkedlist_add(tls_io_instance->pending_io_list, pending_socket_io) == NULL)
+                            {
+                                LogError("Unable to add socket to pending list.");
+                                free(pending_socket_io->bytes);
+                                free(pending_socket_io);
+                                result = __FAILURE__;
+                            }
+                            else
+                            {
+                                result = 0;
+                            }
+                        }
+                    }
                 }
             }
         }
-    }
-
-    /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_007: [ If the callback function is set as NULL, the tlsio_openssl_compact shall not call anything. ] */
-    if (on_send_complete != NULL)
-    {
-        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_002: [ The tlsio_openssl_compact shall report the open operation status using the IO_OPEN_RESULT enumerator defined in the xio.h ]*/
-        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_006: [ The tlsio_openssl_compact shall return the status of all async operations using the callbacks. ]*/
-        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_042: [ The tlsio_openssl_compact_dowork shall supply the provided callback_context when it calls on_send_complete. ]*/
-        on_send_complete(callback_context, send_result_for_send_complete_callback);
     }
     return result;
 }
@@ -701,10 +632,69 @@ static int create_ssl(TLS_IO_INSTANCE* tls_io_instance)
     return result;
 }
 
-
 static void dowork_send(TLS_IO_INSTANCE* tls_io_instance)
 {
-    (void)tls_io_instance;
+    LIST_ITEM_HANDLE first_pending_io = singlylinkedlist_get_head_item(tls_io_instance->pending_io_list);
+    if (first_pending_io != NULL)
+    {
+        PENDING_SOCKET_IO* pending_message = (PENDING_SOCKET_IO*)singlylinkedlist_item_get_value(first_pending_io);
+        // Initialize the send start time if necessary
+        if (pending_message->send_timeout_end_time == 0)
+        {
+            pending_message->send_timeout_end_time = time(NULL) + TLSIO_MSG_SEND_TIMEOUT_SECONDS;
+        }
+
+        time_t now = time(NULL);
+        if (now > pending_message->send_timeout_end_time)
+        {
+            LogInfo("send timeout");
+            close_and_destroy_head_message(tls_io_instance, IO_SEND_ERROR);
+        }
+        else
+        {
+            if (pending_message->unsent_size == 0)
+            {
+                /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_047: [ If an enqueued message size is 0, the tlsio_openssl_compact_dowork shall just call the on_send_complete with IO_SEND_OK. ]*/
+                close_and_destroy_head_message(tls_io_instance, IO_SEND_OK);
+            }
+            else
+            {
+                uint8_t* buffer = ((uint8_t*)pending_message->bytes) +
+                    pending_message->size - pending_message->unsent_size;
+                int write_result = SSL_write(tls_io_instance->ssl, buffer, pending_message->unsent_size);
+                // https://wiki.openssl.org/index.php/Manual:SSL_write(3)
+
+                if (write_result > 0)
+                {
+                    pending_message->unsent_size -= write_result;
+                    if (pending_message->unsent_size == 0)
+                    {
+                        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_045: [ If the ssl was able to send all the bytes in an enqueued message, the tlsio_openssl_compact_dowork shall call the on_send_complete with IO_SEND_OK. ]*/
+                        // The whole message has been sent successfully
+                        close_and_destroy_head_message(tls_io_instance, IO_SEND_OK);
+                    }
+                    else
+                    {
+                        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_043: [ if the ssl send was not able to send an entire enqueued message at once, tlsio_openssl_compact_dowork shall call the ssl again to send the remaining bytes. ]*/
+                        // Repeat the send on the next pass with the rest of the message
+                    }
+                }
+                else
+                {
+                    // SSL_write returned non-success. It may just be busy, or it may be broken.
+                    int hard_error = is_hard_ssl_error(tls_io_instance->ssl, write_result);
+                    if (hard_error != 0)
+                    {
+                        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_044: [ If the ssl fails before sending all of the bytes in an enqueued message, the tlsio_openssl_compact_dowork shall call the on_send_complete with IO_SEND_ERROR. ]*/
+                        // This is an unexpected error, and we need to bail out. Probably
+                        // lost internet connection.
+                        LogInfo("Error from SSL_write: %d", hard_error);
+                        close_and_destroy_head_message(tls_io_instance, IO_SEND_ERROR);
+                    }
+                }
+            }
+        }
+    }
 }
 
 static void dowork_begin_dns(TLS_IO_INSTANCE* tls_io_instance)
@@ -715,8 +705,8 @@ static void dowork_begin_dns(TLS_IO_INSTANCE* tls_io_instance)
 
 static void dowork_poll_dns(TLS_IO_INSTANCE* tls_io_instance)
 {
-    // DNS_Get_IPv4 is a blocking call, and will get replaced with
-    // an asynchronous version when available.
+    // DNS_Get_IPv4 is a blocking call, and will get replaced with the 'poll'
+    // part of an asynchronous version when available.
 
     // TODO: remember to add check_for_open_timeout(tls_io_instance) when making async conversion
 
@@ -867,7 +857,7 @@ void tlsio_openssl_dowork(CONCRETE_IO_HANDLE tls_io)
             dowork_read(tls_io_instance);
             dowork_send(tls_io_instance);
             break;
-        case TSLIO_STATE_ERROR:
+        case TLSIO_STATE_ERROR:
             // There's nothing valid to do here but wait to be destroyed
             break;
         default:
