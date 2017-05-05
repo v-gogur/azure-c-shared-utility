@@ -15,6 +15,16 @@
 #include "azure_c_shared_utility/agenttime.h"
 #include "azure_c_shared_utility/dns.h"
 #include "azure_c_shared_utility/socket_async.h"
+#include "azure_c_shared_utility/singlylinkedlist.h"
+
+typedef struct PENDING_SOCKET_IO_TAG
+{
+    unsigned char* bytes;
+    size_t size;
+    ON_SEND_COMPLETE on_send_complete;
+    void* callback_context;
+    SINGLYLINKEDLIST_HANDLE pending_io_list;
+} PENDING_SOCKET_IO;
 
 // It is not anticipated that there should ever be a need to modify the
 // SSL_MAX_BLOCK_TIME_SECONDS value, but if there is then it can be
@@ -22,6 +32,8 @@
 #ifndef SSL_MAX_BLOCK_TIME_SECONDS
 #define SSL_MAX_BLOCK_TIME_SECONDS 20
 #endif // !SSL_MAX_BLOCK_TIME_SECONDS
+
+#define MAX_VALID_PORT 0xffff
 
 // A delay time that seems good for when the ssl client wants repeated
 // callbacks to finish a conversation with the server. 
@@ -43,7 +55,9 @@
 typedef enum TLSIO_STATE_TAG
 {
     TLSIO_STATE_NOT_OPEN,
+    TLSIO_STATE_OPENING_NEED_DNS,
     TLSIO_STATE_OPEN,
+    TSLIO_STATE_ERROR,      // Needs to be destroyed and recreated
 } TLSIO_STATE;
 
 // This structure definition is mirrored in the unit tests, so if you change
@@ -53,17 +67,21 @@ typedef struct TLS_IO_INSTANCE_TAG
     uint16_t struct_size;
     ON_BYTES_RECEIVED on_bytes_received;
     ON_IO_ERROR on_io_error;
+    ON_IO_OPEN_COMPLETE on_open_complete;
     void* on_bytes_received_context;
     void* on_io_error_context;
+    void* on_open_complete_context;
     SSL* ssl;
     SSL_CTX* ssl_context;
     TLSIO_STATE tlsio_state;
     uint32_t host_address;
+    char* hostname;
     uint16_t port;
     char* certificate;
     const char* x509certificate;
     const char* x509privatekey;
     SOCKET_ASYNC_HANDLE sock;
+    SINGLYLINKEDLIST_HANDLE pending_io_list;
 } TLS_IO_INSTANCE;
 
 static const char* null_tlsio_message = "NULL tlsio";
@@ -82,6 +100,11 @@ static void internal_close(TLS_IO_INSTANCE* tls_io_instance)
         (void)SSL_shutdown(tls_io_instance->ssl);
     }
 
+    if (tls_io_instance->hostname != NULL)
+    {
+        free(tls_io_instance->hostname);
+        tls_io_instance->hostname = NULL;
+    }
     if (tls_io_instance->ssl != NULL)
     {
         SSL_free(tls_io_instance->ssl);
@@ -94,10 +117,28 @@ static void internal_close(TLS_IO_INSTANCE* tls_io_instance)
     }
     if (tls_io_instance->sock >= 0)
     {
-        // The underlying socke API does not support waiting for close
+        // The underlying socket API does not support waiting for close
         // to complete, so it isn't possible to do so.
         socket_async_destroy(tls_io_instance->sock);
         tls_io_instance->sock = -1;
+    }
+    if (tls_io_instance->pending_io_list != NULL)
+    {
+        /* clear all pending IOs */
+        LIST_ITEM_HANDLE first_pending_io = singlylinkedlist_get_head_item(tls_io_instance->pending_io_list);
+        while (first_pending_io != NULL)
+        {
+            PENDING_SOCKET_IO* pending_socket_io = (PENDING_SOCKET_IO*)singlylinkedlist_item_get_value(first_pending_io);
+            if (pending_socket_io != NULL)
+            {
+                free(pending_socket_io->bytes);
+                free(pending_socket_io);
+            }
+
+            (void)singlylinkedlist_remove(tls_io_instance->pending_io_list, first_pending_io);
+            first_pending_io = singlylinkedlist_get_head_item(tls_io_instance->pending_io_list);
+        }
+        // singlylinkedlist_destroy gets called in destroy
     }
 
     tls_io_instance->on_bytes_received = NULL;
@@ -117,6 +158,7 @@ static void internal_close_with_stored_error_callback(TLS_IO_INSTANCE* tls_io_in
         callback(context);
     }
 }
+
 
 // This method tests for hard errors returned from either SSL_write or SSL_connect.
 // Returns 
@@ -140,6 +182,15 @@ static int create_and_connect_ssl(TLS_IO_INSTANCE* tls_io_instance)
 
     LogInfo("OpenSSL thread start...");
 
+    /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_014: [ The tlsio_openssl_compact_create shall convert the provided hostName to an IPv4 address. ]*/
+    /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_021: [ The tlsio_openssl_compact_open shall begin the process of opening the ssl connection with the host provided in the tlsio_openssl_compact_create call. ]*/
+    uint32_t ipV4 = DNS_Get_IPv4(tls_io_config->hostname);
+    if (ipV4 == 0)
+    {
+        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_015:  [ If the IP for the hostName cannot be found, tlsio_openssl_compact_dowork shall call on_io_open_complete with IO_OPEN_ERROR. ]*/
+        LogInfo("Could not get IPv4 for %s", tls_io_config->hostname);
+        result = NULL;
+    }
 
     //int sock = SSL_Socket_Create(tls_io_instance->host_address, tls_io_instance->port);
     SOCKET_ASYNC_HANDLE sock = socket_async_create(tls_io_instance->host_address, tls_io_instance->port, false, NULL);
@@ -237,7 +288,7 @@ static int create_and_connect_ssl(TLS_IO_INSTANCE* tls_io_instance)
                             else
                             {
                                 time_t now = get_time(NULL);
-                                if (now > end_time) 
+                                if (now > end_time)
                                 {
                                     /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_074: [ The tlsio_openssl_compact_send shall spend no longer than the internally defined SSL_MAX_BLOCK_TIME_SECONDS (20 seconds) attempting to perform the SSL_connect operation. ]*/
                                     /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_030: [ If tlsio_openssl_compact_dowork fails to open the ssl connection it shall call on_io_open_complete with IO_OPEN_ERROR. ]*/
@@ -268,41 +319,67 @@ CONCRETE_IO_HANDLE tlsio_openssl_create(void* io_create_parameters)
     TLSIO_CONFIG* tls_io_config = (TLSIO_CONFIG*)io_create_parameters;
     TLS_IO_INSTANCE* result;
 
-    /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_013: [ If the io_create_parameters value is NULL, tlsio_openssl_compact_create shall log an error and return NULL. ]*/
+    /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_0073: [ If the hostname member of io_create_parameters value is NULL, tlsio_openssl_compact_create shall log an error and return NULL. ]*/
     if (io_create_parameters == NULL)
     {
-        LogError("NULL tls_io_config.");
+        LogError("NULL tls_io_config");
         result = NULL;
     }
     else
     {
-        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_014: [ The tlsio_openssl_compact_create shall convert the provided hostName to an IPv4 address. ]*/
-        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_021: [ The tlsio_openssl_compact_open shall begin the process of opening the ssl connection with the host provided in the tlsio_openssl_compact_create call. ]*/
-        //uint32_t ipV4 = SSL_Get_IPv4(tls_io_config->hostname);
-        uint32_t ipV4 = DNS_Get_IPv4(tls_io_config->hostname);
-        if (ipV4 == 0)
+        if (tls_io_config->hostname == NULL)
         {
-            /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_015:  [ If the IP for the hostName cannot be found, tlsio_openssl_compact_dowork shall call on_io_open_complete with IO_OPEN_ERROR. ]*/
-            LogInfo("Could not get IPv4 for %s", tls_io_config->hostname);
+            LogError("NULL tls_io_config->hostname");
             result = NULL;
         }
         else
         {
-            result = malloc(sizeof(TLS_IO_INSTANCE));
-            if (result == NULL)
+            if (tls_io_config->port < 0 || tls_io_config->port > MAX_VALID_PORT)
             {
-                /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_010: [ If the allocation fails, tlsio_openssl_compact_create shall return NULL. ]*/
-                LogError("Failed to allocate tlsio instance.");
+                LogError("tls_io_config->port out of range");
+                result = NULL;
             }
             else
             {
-                /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_011: [ The tlsio_openssl_compact_create shall initialize all internal callback pointers as NULL. ]*/
-                memset(result, 0, sizeof(TLS_IO_INSTANCE));
-                result->struct_size = sizeof(TLS_IO_INSTANCE);
-                result->host_address = ipV4;
-                result->port = (uint16_t)tls_io_config->port;
-                result->tlsio_state = TLSIO_STATE_NOT_OPEN;
-                result->sock = SOCKET_ASYNC_INVALID_SOCKET;
+                result = malloc(sizeof(TLS_IO_INSTANCE));
+                if (result == NULL)
+                {
+                    /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_010: [ If any resource allocation fails, tlsio_openssl_compact_create shall return NULL. ]*/
+                    LogError("Failed to allocate tlsio instance");
+                }
+                else
+                {
+                    /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_011: [ The tlsio_openssl_compact_create shall initialize all internal callback pointers as NULL. ]*/
+                    memset(result, 0, sizeof(TLS_IO_INSTANCE));
+                    result->struct_size = sizeof(TLS_IO_INSTANCE);
+                    result->host_address = NULL;
+                    result->port = (uint16_t)tls_io_config->port;
+                    result->tlsio_state = TLSIO_STATE_NOT_OPEN;
+                    result->sock = SOCKET_ASYNC_INVALID_SOCKET;
+                    result->hostname = NULL;
+                    result->pending_io_list = NULL;
+
+                    result->hostname = (char*)malloc(strlen(tls_io_config->hostname) + 1);
+                    if (result->hostname == NULL)
+                    {
+                        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_011: [ The tlsio_openssl_compact_create shall initialize all internal callback pointers as NULL. ]*/
+                        LogError("Failed to allocate tlsio instance");
+                        tlsio_openssl_destroy(result);
+                        result = NULL;
+                    }
+                    else
+                    {
+                        (void)strcpy(result->hostname, tls_io_config->hostname);
+                        result->pending_io_list = singlylinkedlist_create();
+                        if (result->pending_io_list == NULL)
+                        {
+                            /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_011: [ The tlsio_openssl_compact_create shall initialize all internal callback pointers as NULL. ]*/
+                            LogError("Failed singlylinkedlist_create");
+                            tlsio_openssl_destroy(result);
+                            result = NULL;
+                        }
+                    }
+                }
             }
         }
     }
@@ -345,6 +422,13 @@ void tlsio_openssl_destroy(CONCRETE_IO_HANDLE tls_io)
             free((void*)tls_io_instance->x509privatekey);
             tls_io_instance->x509privatekey = NULL;
         }
+        if (tls_io_instance->pending_io_list != NULL)
+        {
+            /* Pending IOs were cleared in internal_close */
+
+            singlylinkedlist_destroy(tls_io_instance->pending_io_list);
+            tls_io_instance->pending_io_list = NULL;
+        }
 
         free(tls_io_instance);
     }
@@ -366,18 +450,12 @@ int tlsio_openssl_open(CONCRETE_IO_HANDLE tls_io,
         LogError(null_tlsio_message);
     }
     else
-
-
-
-        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_074: [ If the on_io_open_complete parameter is NULL, tlsio_openssl_compact_open shall log an error and return FAILURE. ]*/
-
-
     {
-        if (tls_io_instance->tlsio_state != TLSIO_STATE_NOT_OPEN)
+        if (on_io_open_complete == NULL)
         {
-            /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_029: [ If tlsio_openssl_compact_open has already been called, it shall log an error, and return FAILURE. ]*/
+            /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_074: [ If the on_io_open_complete parameter is NULL, tlsio_openssl_compact_open shall log an error and return FAILURE. ]*/
+            LogError("Required parameter on_io_open_complete is NULL");
             result = __FAILURE__;
-            LogError("Unexpected tlsio_state. Expected state is TLSIO_STATE_NOT_OPEN.");
         }
         else
         {
@@ -415,34 +493,26 @@ int tlsio_openssl_open(CONCRETE_IO_HANDLE tls_io,
                         tls_io_instance->on_io_error = on_io_error;
                         tls_io_instance->on_io_error_context = on_io_error_context;
 
+                        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_024: [ The tlsio_openssl_compact_open shall store the provided on_io_error callback function address. ]*/
+                        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_025: [ The tlsio_openssl_compact_open shall store the provided on_io_error_context handle. ]*/
+                        tls_io_instance->on_open_complete = on_io_open_complete;
+                        tls_io_instance->on_open_complete_context = on_io_open_complete_context;
+
                         /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_026: [ If tlsio_openssl_compact_open successfully begins opening the ssl connection, it shall return 0. ]*/
-                        result = create_and_connect_ssl(tls_io_instance);
+                        // All the real work happens in dowork
+                        tls_io_instance->tlsio_state = TLSIO_STATE_OPENING_NEED_DNS;
+                        result = 0;
                     }
                 }
             }
             if (result != 0)
             {
-                if (tls_io_instance != NULL)
-                {
-                    /* Codes_SSRS_TLSIO_OPENSSL_COMPACT_30_071: [ Failures which indicate that the SSL connection cannot be trusted shall cause the tlsio_openssl_compact to transition to the "Not Open" state. ]*/
-                    /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_030: [ If tlsio_openssl_compact_dowork fails to open the ssl connection it shall call on_io_open_complete with IO_OPEN_ERROR. ]*/
-                    internal_close(tls_io_instance);
-                }
+                /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_0026: [ If tlsio_openssl_compact_open successfully begins opening the ssl connection, it shall return 0. ]*/
+                on_io_open_complete(on_io_open_complete_context, IO_OPEN_ERROR);
             }
         }
     }
 
-    /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_007: [ If the callback function is set as NULL, the tlsio_openssl_compact shall not call anything. ] */
-    if (on_io_open_complete)
-    {
-        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_002: [ The tlsio_openssl_compact shall report the open operation status using the IO_OPEN_RESULT enumerator defined in the xio.h ]*/
-        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_006: [ The tlsio_openssl_compact shall return the status of all async operations using the callbacks. ]*/
-        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_027:  [ If tlsio_openssl_compact_dowork successfully opens the ssl connection it shall call on_io_open_complete with IO_OPEN_OK. ]*/
-        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_028: [ If tlsio_openssl_compact_open calls on_io_open_complete, it shall always pass the provided on_io_open_complete_context parameter. ]*/
-        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_031: [ If the tlsio_openssl_compact_open returns FAILURE it shall call on_io_open_complete with IO_OPEN_ERROR. ]*/
-        on_io_open_complete(on_io_open_complete_context, result == 0 ? IO_OPEN_OK : IO_OPEN_ERROR);
-    }
-    /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_030: [ If tlsio_openssl_compact_dowork fails to open the ssl connection it shall call on_io_open_complete with IO_OPEN_ERROR. ]*/
     return result;
 }
 
@@ -455,7 +525,7 @@ int tlsio_openssl_close(CONCRETE_IO_HANDLE tls_io, ON_IO_CLOSE_COMPLETE on_io_cl
     TLS_IO_INSTANCE* tls_io_instance = (TLS_IO_INSTANCE*)tls_io;
     if (tls_io == NULL)
     {
-    /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_033: [ If the tlsio_handle parameter is NULL, tlsio_openssl_compact_close shall log an error and return FAILURE. ]*/
+        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_033: [ If the tlsio_handle parameter is NULL, tlsio_openssl_compact_close shall log an error and return FAILURE. ]*/
         result = __FAILURE__;
         LogError(null_tlsio_message);
     }
