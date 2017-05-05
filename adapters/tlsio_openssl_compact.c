@@ -131,6 +131,7 @@ static void internal_close(TLS_IO_INSTANCE* tls_io_instance)
             PENDING_SOCKET_IO* pending_socket_io = (PENDING_SOCKET_IO*)singlylinkedlist_item_get_value(first_pending_io);
             if (pending_socket_io != NULL)
             {
+                pending_socket_io->on_send_complete(pending_socket_io->callback_context, IO_SEND_CANCELLED);
                 free(pending_socket_io->bytes);
                 free(pending_socket_io);
             }
@@ -138,7 +139,7 @@ static void internal_close(TLS_IO_INSTANCE* tls_io_instance)
             (void)singlylinkedlist_remove(tls_io_instance->pending_io_list, first_pending_io);
             first_pending_io = singlylinkedlist_get_head_item(tls_io_instance->pending_io_list);
         }
-        // singlylinkedlist_destroy gets called in destroy
+        // singlylinkedlist_destroy gets called in the main destroy
     }
 
     tls_io_instance->on_bytes_received = NULL;
