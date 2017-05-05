@@ -57,6 +57,7 @@ typedef enum TLSIO_STATE_TAG
     TLSIO_STATE_NOT_OPEN,
     TLSIO_STATE_OPENING_BEGIN,
     TLSIO_STATE_OPENING_WAITING_DNS,
+    TLSIO_STATE_OPENING_WAITING_SOCKET,
     TLSIO_STATE_OPEN,
     TSLIO_STATE_ERROR,      // Needs to be destroyed and recreated
 } TLSIO_STATE;
@@ -189,21 +190,7 @@ static int create_and_connect_ssl(TLS_IO_INSTANCE* tls_io_instance)
     int result;
     int ret;
 
-    //int sock = SSL_Socket_Create(tls_io_instance->host_address, tls_io_instance->port);
-    SOCKET_ASYNC_HANDLE sock = socket_async_create(tls_io_instance->host_ipV4_address, tls_io_instance->port, false, NULL);
-    if (sock < 0)
     {
-        // This is a communication interruption rather than a program bug
-        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_030: [ If tlsio_openssl_compact_dowork fails to open the ssl connection it shall call on_io_open_complete with IO_OPEN_ERROR. ]*/
-        LogInfo("Could not open the socket");
-        result = __FAILURE__;
-    }
-    else
-    {
-        // At this point the tls_io_instance "owns" the socket, 
-        // so destroy_openssl_instance must be called if the socket needs to be closed
-        tls_io_instance->sock = sock;
-
         tls_io_instance->ssl_context = SSL_CTX_new(TLSv1_2_client_method());
         if (tls_io_instance->ssl_context == NULL)
         {
@@ -223,7 +210,7 @@ static int create_and_connect_ssl(TLS_IO_INSTANCE* tls_io_instance)
             else
             {
                 // returns 1 on success
-                ret = SSL_set_fd(tls_io_instance->ssl, sock);
+                ret = SSL_set_fd(tls_io_instance->ssl, tls_io_instance->sock);
                 if (ret != 1)
                 {
                     /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_030: [ If tlsio_openssl_compact_dowork fails to open the ssl connection it shall call on_io_open_complete with IO_OPEN_ERROR. ]*/
@@ -718,21 +705,55 @@ static void dowork_poll_dns(TLS_IO_INSTANCE* tls_io_instance)
     }
     else
     {
-        // Try to transition to TLSIO_STATE_OPEN
-        LogInfo("create_and_connect_ssl");
-        int result = create_and_connect_ssl(tls_io_instance);
-        if (result != 0)
+        SOCKET_ASYNC_HANDLE sock = socket_async_create(tls_io_instance->host_ipV4_address, tls_io_instance->port, false, NULL);
+        if (sock < 0)
         {
+            // This is a communication interruption rather than a program bug
+            /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_030: [ If tlsio_openssl_compact_dowork fails to open the ssl connection it shall call on_io_open_complete with IO_OPEN_ERROR. ]*/
+            LogInfo("Could not open the socket");
             enter_open_error_state(tls_io_instance);
         }
         else
         {
-            // We're now in TLSIO_STATE_OPEN. We could re-enter dowork, but that
-            // would have a non-trivial cost in writing unit tests, a trivial cost in
-            // stack size, and a negligible improvement in utility, so we won't do it.
-            tls_io_instance->tlsio_state = TLSIO_STATE_OPEN;
-            tls_io_instance->on_open_complete(tls_io_instance->on_open_complete_context, IO_OPEN_OK);
+            // The socket has been created successfully, so now wait for it to
+            // finish the TCP handshake.
+            tls_io_instance->sock = sock;
+            tls_io_instance->tlsio_state = TLSIO_STATE_OPENING_WAITING_SOCKET;
         }
+    }
+}
+
+static void dowork_poll_socket(TLS_IO_INSTANCE* tls_io_instance)
+{
+    bool is_complete;
+    int result = socket_async_is_create_complete(tls_io_instance->sock, &is_complete);
+    if (result != 0)
+    {
+        // Transition to TSLIO_STATE_ERROR
+        LogInfo("socket_async_is_create_complete failure");
+        enter_open_error_state(tls_io_instance);
+    }
+    else
+    {
+        if (is_complete)
+        {
+            // Try to transition to TLSIO_STATE_OPEN
+            LogInfo("create_and_connect_ssl");
+            int create_and_connect_ssl_result = create_and_connect_ssl(tls_io_instance);
+            if (create_and_connect_ssl_result != 0)
+            {
+                enter_open_error_state(tls_io_instance);
+            }
+            else
+            {
+                // We're now in TLSIO_STATE_OPEN. We could re-enter dowork, but that
+                // would have a non-trivial cost in writing unit tests, a trivial cost in
+                // stack size, and a negligible improvement in utility, so we won't do it.
+                tls_io_instance->tlsio_state = TLSIO_STATE_OPEN;
+                tls_io_instance->on_open_complete(tls_io_instance->on_open_complete_context, IO_OPEN_OK);
+            }
+        }
+        // If not is_complete, just keep waiting
     }
 }
 
@@ -750,10 +771,6 @@ void tlsio_openssl_dowork(CONCRETE_IO_HANDLE tls_io)
         // This switch statement handles all of the state transitions during the opening process
         switch (tls_io_instance->tlsio_state)
         {
-        case TLSIO_STATE_OPEN:
-            dowork_read(tls_io_instance);
-            dowork_send(tls_io_instance);
-            break;
         case TLSIO_STATE_NOT_OPEN:
             // Waiting to be opened, nothing to do
             break;
@@ -764,6 +781,14 @@ void tlsio_openssl_dowork(CONCRETE_IO_HANDLE tls_io)
         case TLSIO_STATE_OPENING_WAITING_DNS:
             LogInfo("dowork_poll_dns");
             dowork_poll_dns(tls_io_instance);
+            break;
+        case TLSIO_STATE_OPENING_WAITING_SOCKET:
+            LogInfo("dowork_poll_socket");
+            dowork_poll_socket(tls_io_instance);
+            break;
+        case TLSIO_STATE_OPEN:
+            dowork_read(tls_io_instance);
+            dowork_send(tls_io_instance);
             break;
         case TSLIO_STATE_ERROR:
             // There's nothing valid to do here but wait to be destroyed
