@@ -20,7 +20,6 @@ set(${theseTestsName}_h_files
 callbacks.h
 ssl_errors.h
 test_points.h
-tlsio_internals.h
 )
 
 include_directories(.)

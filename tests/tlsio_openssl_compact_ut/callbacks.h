@@ -56,14 +56,14 @@ static void reset_callback_context_records()
 {
     on_io_open_complete_call_count = 0;
     on_io_open_complete_context_ok = false;
-    on_io_open_complete_result = -1;
+    on_io_open_complete_result = (IO_OPEN_RESULT)-1;
     on_io_error_call_count = 0;
     on_io_error_context_ok = false;
     on_io_close_call_count = 0;
     on_io_close_context_ok = false;
     on_io_send_complete_call_count = 0;
     on_io_send_complete_context_ok = false;
-    on_io_send_complete_result = -1;
+    on_io_send_complete_result = (IO_SEND_RESULT)-1;
     on_bytes_received_call_count = 0;
     on_bytes_received_context_ok = false;
 }
