@@ -13,8 +13,8 @@
 #define SSL_Get_IPv4_OK (uint32_t)0x11223344
 #define SSL_Get_IPv4_FAIL 0
 
-#define SSL_goood_port_number  447
-const char* const SSL_goood_host_name = "fakehost.com";
+#define SSL_good_port_number  447
+#define SSL_good_host_name "fakehost.com"
 uint8_t* SSL_send_buffer = (uint8_t*)"111111112222222233333333";
 
 

@@ -111,7 +111,7 @@ static void _Bool_ToString(char* string, size_t bufferSize, _Bool val)
  /**
   * You can create some global variables that your test will need in some way.
   */
-static TLSIO_CONFIG tlsio_config = { NULL, SSL_goood_port_number, NULL, NULL };
+static TLSIO_CONFIG tlsio_config = { NULL, SSL_good_port_number, NULL, NULL };
 
  /**
   * Umock error will helps you to identify errors in the test suite or in the way that you are 
@@ -196,7 +196,7 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
          * You can initialize other global variables here, for instance image that you have a standard void* that will be converted
          *   any pointer that your test needs.
          */
-        tlsio_config.hostname = SSL_goood_host_name;
+        tlsio_config.hostname = SSL_good_host_name;
     }
 
     /**
@@ -235,6 +235,16 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
     }
 
 #include "moribund.h"
+
+    TEST_FUNCTION(tlsio_openssl_create)
+    {
+        ///arrange
+        //TLSIO_CONFIG config = {};
+
+        ///act
+
+        ///assert
+    }
 
     /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30XX_008: [ The tlsio_get_interface_description shall return the VTable IO_INTERFACE_DESCRIPTION. ]*/
     TEST_FUNCTION(tlsio_openssl_create__tlsio_get_interface_description)
