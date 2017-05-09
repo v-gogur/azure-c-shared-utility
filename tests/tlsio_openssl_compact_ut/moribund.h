@@ -1,4 +1,7 @@
 
+#include "test_points.h"
+
+
 // This main_sequence test performs all of the test passes that require sequencing of tlsio calls
 // To do this, it expands on the mocking framework's negative tests concept by adding
 // "test point", which are defined in the test_points.h file. These test points capture the 

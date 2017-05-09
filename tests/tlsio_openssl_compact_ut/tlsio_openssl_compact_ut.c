@@ -106,7 +106,7 @@ static void _Bool_ToString(char* string, size_t bufferSize, _Bool val)
 // These "headers" are actuall source files that are broken out of this file for readability
 #include "callbacks.h"
 #include "ssl_errors.h"
-#include "test_points.h"
+#include "test_defines.h"
 
  /**
   * You can create some global variables that your test will need in some way.
@@ -236,7 +236,60 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
 
 #include "moribund.h"
 
-    TEST_FUNCTION(tlsio_openssl_create__succeeds)
+    TEST_FUNCTION(tlsio_openssl__create_parameter_validation_fails__fails)
+    {
+        ///arrange
+        const IO_INTERFACE_DESCRIPTION* tlsio_id = tlsio_get_interface_description();
+        TLSIO_CONFIG config[4];
+        create_parameters_t p[4];
+        populate_create_parameters(p + 0, NULL,       SSL_good_host_name, SSL_good_port_number, "Should fail with NULL config");
+        populate_create_parameters(p + 1, config + 1, NULL,               SSL_good_port_number, "Should fail with NULL hostname");
+        populate_create_parameters(p + 2, config + 2, SSL_good_host_name, SSL_port_number_too_low, "Should fail with port number too low");
+        populate_create_parameters(p + 3, config + 3, SSL_good_host_name, SSL_port_number_too_high, "Should fail with port number too high");
+
+        // Cycle through each failing combo of parameters
+        for (int i = 0; i < sizeof(config) / sizeof(TLSIO_CONFIG); i++)
+        {
+            ///act
+            CONCRETE_IO_HANDLE result = tlsio_id->concrete_io_create(p[i].config);
+
+            ///assert
+            ASSERT_IS_NULL_WITH_MSG(result, p[i].fail_msg);
+        }
+    }
+
+    TEST_FUNCTION(tlsio_openssl__create_unhappy_paths__fails)
+    {
+        ///arrange
+        int negativeTestsInitResult = umock_c_negative_tests_init();
+        ASSERT_ARE_EQUAL(int, 0, negativeTestsInitResult);
+
+        const IO_INTERFACE_DESCRIPTION* tlsio_id = tlsio_get_interface_description();
+        TLSIO_CONFIG config = { SSL_good_host_name, SSL_good_port_number , NULL, NULL };
+
+        STRICT_EXPECTED_CALL(gballoc_malloc(IGNORED_NUM_ARG));  // concrete_io struct
+        STRICT_EXPECTED_CALL(gballoc_malloc(IGNORED_NUM_ARG));  // copy hostname
+        STRICT_EXPECTED_CALL(gballoc_malloc(IGNORED_NUM_ARG));  // singlylinkedlist_create
+        umock_c_negative_tests_snapshot();
+
+        // Skip the failing of the first call
+        for (unsigned int i = 0; i < umock_c_negative_tests_call_count(); i++)
+        {
+            umock_c_negative_tests_reset();
+            umock_c_negative_tests_fail_call(i);
+
+            ///act
+            CONCRETE_IO_HANDLE result = tlsio_id->concrete_io_create(&config);
+
+            ///assert
+            ASSERT_IS_NULL(result);
+        }
+
+        ///cleanup
+        umock_c_negative_tests_deinit();
+    }
+
+    TEST_FUNCTION(tlsio_openssl__create__succeeds)
     {
         ///arrange
         const IO_INTERFACE_DESCRIPTION* tlsio_id = tlsio_get_interface_description();
@@ -257,7 +310,7 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
         tlsio_id->concrete_io_destroy(result);
     }
 
-    TEST_FUNCTION(tlsio_openssl_destroy_unopened__succeeds)
+    TEST_FUNCTION(tlsio_openssl__destroy_unopened__succeeds)
     {
         ///arrange
         const IO_INTERFACE_DESCRIPTION* tlsio_id = tlsio_get_interface_description();
@@ -271,12 +324,36 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
         STRICT_EXPECTED_CALL(gballoc_free(IGNORED_NUM_ARG));  // concrete_io struct
 
         ///act
-        tlsio_id->concrete_io_destroy(&config);
+        tlsio_id->concrete_io_destroy(result);
 
         ///assert
         ASSERT_ARE_EQUAL(char_ptr, umock_c_get_expected_calls(), umock_c_get_actual_calls());
 
         ///cleanup
+    }
+
+    TEST_FUNCTION(tlsio_openssl__open_parameter_validation_fails__fails)
+    {
+#if(0)
+        ///arrange
+        // no calls expected
+
+        send_receive_parameters_t parameters[2];
+        //                                     buffer       size            received_count              fail_msg
+        populate_s_r_parameters(parameters + 0, NULL, sizeof(test_msg), &sent_count_receptor, "Unexpected receive_result success when buffer is NULL");
+        populate_s_r_parameters(parameters + 1, test_msg, sizeof(test_msg), NULL, "Unexpected receive_result success when received_count is NULL");
+
+        // Cycle through each failing combo of parameters
+        for (int i = 0; i < sizeof(parameters) / sizeof(send_receive_parameters_t); i++)
+        {
+            ///act
+            int open_result = tlsio_id->concrete_io_open(tlsio_for_open_call, open_callback, IO_OPEN_COMPLETE_CONTEXT, on_bytes_received_for_open,
+                IO_BYTES_RECEIVED_CONTEXT, on_io_error_for_open, IO_ERROR_CONTEXT);
+
+            ///assert
+            //ASSERT_ARE_NOT_EQUAL_WITH_MSG(int, send_result, 0, parameters[i].fail_msg);
+        }
+#endif
     }
 
     /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30XX_008: [ The tlsio_get_interface_description shall return the VTable IO_INTERFACE_DESCRIPTION. ]*/
