@@ -196,7 +196,7 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
          * You can initialize other global variables here, for instance image that you have a standard void* that will be converted
          *   any pointer that your test needs.
          */
-        tlsio_config.hostname = SSL_good_host_name;
+        tlsio_config.hostname = SSL_good_old_host_name;
     }
 
     /**
@@ -236,18 +236,54 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
 
 #include "moribund.h"
 
-    TEST_FUNCTION(tlsio_openssl_create)
+    TEST_FUNCTION(tlsio_openssl_create__succeeds)
     {
         ///arrange
-        //TLSIO_CONFIG config = {};
+        const IO_INTERFACE_DESCRIPTION* tlsio_id = tlsio_get_interface_description();
+        TLSIO_CONFIG config = { SSL_good_host_name, SSL_good_port_number , NULL, NULL };
 
-        ///act
+        STRICT_EXPECTED_CALL(gballoc_malloc(IGNORED_NUM_ARG));  // concrete_io struct
+        STRICT_EXPECTED_CALL(gballoc_malloc(IGNORED_NUM_ARG));  // copy hostname
+        STRICT_EXPECTED_CALL(gballoc_malloc(IGNORED_NUM_ARG));  // singlylinkedlist_create
+
+                                                                ///act
+        CONCRETE_IO_HANDLE result = tlsio_id->concrete_io_create(&config);
+        (void)result;
 
         ///assert
+        ASSERT_IS_NOT_NULL(result);
+        ASSERT_ARE_EQUAL(char_ptr, umock_c_get_expected_calls(), umock_c_get_actual_calls());
+
+        ///cleanup
+        tlsio_id->concrete_io_destroy(result);
     }
 
+#if(0)
+    TEST_FUNCTION(tlsio_openssl_destroy_unopened__succeeds)
+    {
+        ///arrange
+        const IO_INTERFACE_DESCRIPTION* tlsio_id = tlsio_get_interface_description();
+        TLSIO_CONFIG config = { SSL_good_host_name, SSL_good_port_number , NULL, NULL };
+
+        STRICT_EXPECTED_CALL(gballoc_malloc(IGNORED_NUM_ARG));  // concrete_io struct
+        STRICT_EXPECTED_CALL(gballoc_malloc(IGNORED_NUM_ARG));  // copy hostname
+        STRICT_EXPECTED_CALL(gballoc_malloc(IGNORED_NUM_ARG));  // singlylinkedlist_create
+
+                                                                ///act
+        CONCRETE_IO_HANDLE result = tlsio_id->concrete_io_create(&config);
+        (void)result;
+
+        ///assert
+        ASSERT_IS_NOT_NULL(result);
+        ASSERT_ARE_EQUAL(char_ptr, umock_c_get_expected_calls(), umock_c_get_actual_calls());
+
+        ///cleanup
+        tlsio_id->concrete_io_destroy(result);
+    }
+#endif
+
     /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30XX_008: [ The tlsio_get_interface_description shall return the VTable IO_INTERFACE_DESCRIPTION. ]*/
-    TEST_FUNCTION(tlsio_openssl_create__tlsio_get_interface_description)
+    TEST_FUNCTION(tlsio_openssl__tlsio_get_interface_description)
     {
         ///act
         const IO_INTERFACE_DESCRIPTION* tlsio_id = tlsio_get_interface_description();

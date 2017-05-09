@@ -33,7 +33,7 @@ TEST_FUNCTION(tlsio_openssl_main_sequence)
         //      TP_TLSIO_MALLOC_FAIL
         //
         /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30XX_015:  [ If the IP for the hostName cannot be found, tlsio_openssl_compact_dowork shall call on_io_open_complete with IO_OPEN_ERROR. ]*/
-        TEST_POINT(TP_DNS_FAIL, DNS_Get_IPv4(SSL_good_host_name));
+        TEST_POINT(TP_DNS_FAIL, DNS_Get_IPv4(SSL_good_old_host_name));
         TEST_POINT(TP_TLSIO_MALLOC_FAIL, gballoc_malloc(IGNORED_NUM_ARG));
 
         // Handle options

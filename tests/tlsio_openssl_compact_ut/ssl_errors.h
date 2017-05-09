@@ -15,6 +15,7 @@
 
 #define SSL_good_port_number  447
 #define SSL_good_host_name "fakehost.com"
+#define SSL_good_old_host_name "fakehost.com"
 uint8_t* SSL_send_buffer = (uint8_t*)"111111112222222233333333";
 
 
