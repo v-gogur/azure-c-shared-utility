@@ -246,9 +246,8 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
         STRICT_EXPECTED_CALL(gballoc_malloc(IGNORED_NUM_ARG));  // copy hostname
         STRICT_EXPECTED_CALL(gballoc_malloc(IGNORED_NUM_ARG));  // singlylinkedlist_create
 
-                                                                ///act
+        ///act
         CONCRETE_IO_HANDLE result = tlsio_id->concrete_io_create(&config);
-        (void)result;
 
         ///assert
         ASSERT_IS_NOT_NULL(result);
@@ -258,29 +257,27 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
         tlsio_id->concrete_io_destroy(result);
     }
 
-#if(0)
     TEST_FUNCTION(tlsio_openssl_destroy_unopened__succeeds)
     {
         ///arrange
         const IO_INTERFACE_DESCRIPTION* tlsio_id = tlsio_get_interface_description();
         TLSIO_CONFIG config = { SSL_good_host_name, SSL_good_port_number , NULL, NULL };
-
-        STRICT_EXPECTED_CALL(gballoc_malloc(IGNORED_NUM_ARG));  // concrete_io struct
-        STRICT_EXPECTED_CALL(gballoc_malloc(IGNORED_NUM_ARG));  // copy hostname
-        STRICT_EXPECTED_CALL(gballoc_malloc(IGNORED_NUM_ARG));  // singlylinkedlist_create
-
-                                                                ///act
         CONCRETE_IO_HANDLE result = tlsio_id->concrete_io_create(&config);
-        (void)result;
+        ASSERT_IS_NOT_NULL(result);
+        umock_c_reset_all_calls();
+
+        STRICT_EXPECTED_CALL(gballoc_free(IGNORED_NUM_ARG));  // copy hostname
+        STRICT_EXPECTED_CALL(gballoc_free(IGNORED_NUM_ARG));  // singlylinkedlist_create
+        STRICT_EXPECTED_CALL(gballoc_free(IGNORED_NUM_ARG));  // concrete_io struct
+
+        ///act
+        tlsio_id->concrete_io_destroy(&config);
 
         ///assert
-        ASSERT_IS_NOT_NULL(result);
         ASSERT_ARE_EQUAL(char_ptr, umock_c_get_expected_calls(), umock_c_get_actual_calls());
 
         ///cleanup
-        tlsio_id->concrete_io_destroy(result);
     }
-#endif
 
     /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30XX_008: [ The tlsio_get_interface_description shall return the VTable IO_INTERFACE_DESCRIPTION. ]*/
     TEST_FUNCTION(tlsio_openssl__tlsio_get_interface_description)
