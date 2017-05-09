@@ -24,7 +24,6 @@ typedef struct PENDING_SOCKET_IO_TAG
     size_t unsent_size;
     ON_SEND_COMPLETE on_send_complete;
     void* callback_context;
-    SINGLYLINKEDLIST_HANDLE pending_io_list;
 } PENDING_SOCKET_IO;
 
 // It is not anticipated that there should ever be a need to modify the
@@ -532,7 +531,6 @@ int tlsio_openssl_send(CONCRETE_IO_HANDLE tls_io, const void* buffer, size_t siz
                             pending_socket_io->unsent_size = size;
                             pending_socket_io->on_send_complete = on_send_complete;
                             pending_socket_io->callback_context = callback_context;
-                            pending_socket_io->pending_io_list = tls_io_instance->pending_io_list;
                             if (size > 0)
                             {
                                 (void)memcpy(pending_socket_io->bytes, buffer, size);
