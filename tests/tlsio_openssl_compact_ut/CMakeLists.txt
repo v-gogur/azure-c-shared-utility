@@ -19,7 +19,7 @@ set(${theseTestsName}_c_files
 set(${theseTestsName}_h_files
 callbacks.h
 ssl_errors.h
-test_points.h
+test_defines.h
 )
 
 include_directories(.)

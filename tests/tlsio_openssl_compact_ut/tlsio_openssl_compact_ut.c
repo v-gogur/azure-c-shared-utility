@@ -234,8 +234,6 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
         TEST_MUTEX_RELEASE(g_testByTest);
     }
 
-#include "moribund.h"
-
     TEST_FUNCTION(tlsio_openssl__create_parameter_validation_fails__fails)
     {
         ///arrange
@@ -315,31 +313,35 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
         ///arrange
         const IO_INTERFACE_DESCRIPTION* tlsio_id = tlsio_get_interface_description();
         TLSIO_CONFIG config = { SSL_good_host_name, SSL_good_port_number, NULL, NULL };
-        CONCRETE_IO_HANDLE tlsio1 = tlsio_id->concrete_io_create(&config);
-        CONCRETE_IO_HANDLE tlsio2 = tlsio_id->concrete_io_create(&config);
-        CONCRETE_IO_HANDLE tlsio3 = tlsio_id->concrete_io_create(&config);
 
-        open_parameters_t p[4];
-        populate_open_parameters(p + 0, NULL,   on_io_open_complete, on_bytes_received, on_io_error, "Unexpected open success when tlsio_handle is NULL");
-        populate_open_parameters(p + 1, tlsio1, NULL,                on_bytes_received, on_io_error, "Unexpected open success when on_io_open_complete is NULL");
-        populate_open_parameters(p + 2, tlsio2, on_io_open_complete, NULL,              on_io_error, "Unexpected open success when on_bytes_received is NULL");
-        populate_open_parameters(p + 3, tlsio3, on_io_open_complete, on_bytes_received, NULL,        "Unexpected open success when on_io_error is NULL");
+        // Parameters arrays
+        bool p0[OPEN_PV_COUNT];
+        ON_IO_OPEN_COMPLETE p1[OPEN_PV_COUNT];
+        ON_BYTES_RECEIVED p2[OPEN_PV_COUNT];
+        ON_IO_ERROR p3[OPEN_PV_COUNT];
+        const char* fm[OPEN_PV_COUNT];
+
+        p0[0] = false; p1[0] = on_io_open_complete; p2[0] = on_bytes_received; p3[0] = on_io_error; fm[0] = "Unexpected open success when tlsio_handle is NULL";
+        p0[1] = true; p1[1] = NULL; /*           */ p2[1] = on_bytes_received; p3[1] = on_io_error; fm[1] = "Unexpected open success when on_io_open_complete is NULL";
+        p0[2] = true; p1[2] = on_io_open_complete; p2[2] = NULL; /*         */ p3[2] = on_io_error; fm[2] = "Unexpected open success when on_bytes_received is NULL";
+        p0[3] = true; p1[3] = on_io_open_complete; p2[3] = on_bytes_received; p3[3] = NULL; /*   */ fm[3] = "Unexpected open success when on_io_error is NULL";
 
         // Cycle through each failing combo of parameters
-        for (int i = 0; i < sizeof(p) / sizeof(open_parameters_t); i++)
+        for (int i = 0; i < OPEN_PV_COUNT; i++)
         {
+            ///arrange
+            CONCRETE_IO_HANDLE tlsio = tlsio_id->concrete_io_create(&config);
+
             ///act
-            int open_result = tlsio_id->concrete_io_open(p->tlsio, p->on_io_open_complete, IO_OPEN_COMPLETE_CONTEXT, p->on_bytes_received,
-                IO_BYTES_RECEIVED_CONTEXT, p->on_io_error, IO_ERROR_CONTEXT);
+            int open_result = tlsio_id->concrete_io_open(p0[i] ? tlsio : NULL, p1[i], IO_OPEN_COMPLETE_CONTEXT, p2[i],
+                IO_BYTES_RECEIVED_CONTEXT, p3[i], IO_ERROR_CONTEXT);
 
             ///assert
-            ASSERT_ARE_NOT_EQUAL_WITH_MSG(int, open_result, 0, p[i].fail_msg);
-        }
+            ASSERT_ARE_NOT_EQUAL_WITH_MSG(int, open_result, 0, fm[i]);
 
-        ///cleanup
-        tlsio_id->concrete_io_destroy(tlsio1);
-        tlsio_id->concrete_io_destroy(tlsio2);
-        tlsio_id->concrete_io_destroy(tlsio3);
+            ///cleanup
+            tlsio_id->concrete_io_destroy(tlsio);
+        }
     }
 
     TEST_FUNCTION(tlsio_openssl__destroy_unopened__succeeds)
