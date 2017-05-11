@@ -53,6 +53,7 @@ static void my_gballoc_free(void* ptr)
 #include "umock_c.h"
 #include "umocktypes_charptr.h"
 #include "umocktypes_bool.h"
+#include "umocktypes_stdint.h"
 #include "umock_c_negative_tests.h"
 #include "azure_c_shared_utility/macro_utils.h"
 #include "azure_c_shared_utility/threadapi.h"
@@ -78,30 +79,6 @@ static void my_gballoc_free(void* ptr)
 #include "azure_c_shared_utility/socket_async.h"
 #include "openssl/ssl.h"
 #undef ENABLE_MOCKS
-
-static int bool_Compare(bool left, bool right)
-{
-    return left != right;
-}
-
-static void bool_ToString(char* string, size_t bufferSize, bool val)
-{
-    (void)bufferSize;
-    (void)strcpy(string, val ? "true" : "false");
-}
-
-#ifndef __cplusplus
-static int _Bool_Compare(_Bool left, _Bool right)
-{
-    return left != right;
-}
-
-static void _Bool_ToString(char* string, size_t bufferSize, _Bool val)
-{
-    (void)bufferSize;
-    (void)strcpy(string, val ? "true" : "false");
-}
-#endif
 
 // These "headers" are actuall source files that are broken out of this file for readability
 #include "callbacks.h"
@@ -160,6 +137,8 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
         ASSERT_ARE_EQUAL(int, 0, result);
         result = umocktypes_bool_register_types();
         ASSERT_ARE_EQUAL(int, 0, result);
+        umocktypes_stdint_register_types();
+        ASSERT_ARE_EQUAL(int, 0, result);
 
         /**
          * It is necessary to identify the types defined on your target. With it, the test system will 
@@ -171,8 +150,6 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
         REGISTER_UMOCK_ALIAS_TYPE(SSL_CTX, void*);
         REGISTER_UMOCK_ALIAS_TYPE(SOCKET_ASYNC_OPTIONS_HANDLE, void*);
         REGISTER_UMOCK_ALIAS_TYPE(SOCKET_ASYNC_HANDLE, int);
-        REGISTER_UMOCK_ALIAS_TYPE(uint32_t, unsigned int);
-        REGISTER_UMOCK_ALIAS_TYPE(uint16_t, unsigned short);
 
         REGISTER_GLOBAL_MOCK_RETURNS(DNS_Get_IPv4, SSL_Get_IPv4_OK, SSL_Get_IPv4_FAIL);
         REGISTER_GLOBAL_MOCK_RETURNS(socket_async_create, SSL_Good_Socket, -1);
