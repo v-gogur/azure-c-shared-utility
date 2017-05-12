@@ -857,11 +857,10 @@ void tlsio_openssl_dowork(CONCRETE_IO_HANDLE tls_io)
     }
 }
 
-/* Codes_SRS_TLSIO_OPENSSL_COMPACT_30XX_056 [ The tlsio_openssl_compact_setoption shall do nothing and return 0. ]*/
 int tlsio_openssl_setoption(CONCRETE_IO_HANDLE tls_io, const char* optionName, const void* value)
 {
     TLS_IO_INSTANCE* tls_io_instance = (TLS_IO_INSTANCE*)tls_io;
-    /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30XX_053: [ If the tlsio_handle parameter is NULL, tlsio_openssl_compact_setoption shall do nothing except log an error and return FAILURE. ]*/
+    /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_120: [ If the tlsio_handle parameter is NULL, tlsio_openssl_compact_setoption shall do nothing except log an error and return FAILURE. ]*/
     int result;
     if (tls_io_instance == NULL)
     {
@@ -870,7 +869,7 @@ int tlsio_openssl_setoption(CONCRETE_IO_HANDLE tls_io, const char* optionName, c
     }
     else
     {
-        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30XX_054: [ If the optionName parameter is NULL, tlsio_openssl_compact_setoption shall do nothing except log an error and return FAILURE. ]*/
+        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_121: [ If the optionName parameter is NULL, tlsio_openssl_compact_setoption shall do nothing except log an error and return FAILURE. ]*/
         if (optionName == NULL)
         {
             LogError("Required optionName parameter is NULL");
@@ -878,7 +877,7 @@ int tlsio_openssl_setoption(CONCRETE_IO_HANDLE tls_io, const char* optionName, c
         }
         else
         {
-            /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30XX_055: [ If the value parameter is NULL, tlsio_openssl_compact_setoption shall do nothing except log an error and return FAILURE. ]*/
+            /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_122: [ If the value parameter is NULL, tlsio_openssl_compact_setoption shall do nothing except log an error and return FAILURE. ]*/
             if (value == NULL)
             {
                 LogError("Required value parameter is NULL");
@@ -886,6 +885,7 @@ int tlsio_openssl_setoption(CONCRETE_IO_HANDLE tls_io, const char* optionName, c
             }
             else
             {
+                /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_123 [ The tlsio_openssl_compact_setoption shall do nothing and return 0. ]*/
                 result = 0;
             }
         }
@@ -893,11 +893,11 @@ int tlsio_openssl_setoption(CONCRETE_IO_HANDLE tls_io, const char* optionName, c
     return result;
 }
 
-/* Codes_SRS_TLSIO_OPENSSL_COMPACT_30XX_058: [ The tlsio_openssl_compact_retrieveoptions shall do nothing and return NULL. ]*/
+/* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_161: [ The tlsio_openssl_compact_retrieveoptions shall do nothing and return NULL. ]*/
 static OPTIONHANDLER_HANDLE tlsio_openssl_retrieveoptions(CONCRETE_IO_HANDLE tls_io)
 {
     TLS_IO_INSTANCE* tls_io_instance = (TLS_IO_INSTANCE*)tls_io;
-    /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30XX_057: [ If the tlsio_handle parameter is NULL, tlsio_openssl_compact_retrieveoptions shall do nothing except log an error and return NULL. ]*/
+    /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_160: [ If the tlsio_handle parameter is NULL, tlsio_openssl_compact_retrieveoptions shall do nothing except log an error and return FAILURE. ]*/
     OPTIONHANDLER_HANDLE result;
     if (tls_io_instance == NULL)
     {
@@ -911,7 +911,7 @@ static OPTIONHANDLER_HANDLE tlsio_openssl_retrieveoptions(CONCRETE_IO_HANDLE tls
     return result;
 }
 
-/* Codes_SRS_TLSIO_OPENSSL_COMPACT_30XX_008: [ The tlsio_get_interface_description shall return the VTable IO_INTERFACE_DESCRIPTION. ]*/
+/* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_008: [ The tlsio_get_interface_description shall return the VTable IO_INTERFACE_DESCRIPTION. ]*/
 static const IO_INTERFACE_DESCRIPTION tlsio_openssl_interface_description =
 {
     tlsio_openssl_retrieveoptions,
@@ -924,7 +924,7 @@ static const IO_INTERFACE_DESCRIPTION tlsio_openssl_interface_description =
     tlsio_openssl_setoption
 };
 
-/* Codes_SRS_TLSIO_OPENSSL_COMPACT_30XX_001: [ The tlsio_openssl_compact shall implement and export all the Concrete functions in the VTable IO_INTERFACE_DESCRIPTION defined in the xio.h. ]*/
+/* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_001: [ The tlsio_openssl_compact shall implement and export all the Concrete functions in the VTable IO_INTERFACE_DESCRIPTION defined in the xio.h. ]*/
 const IO_INTERFACE_DESCRIPTION* tlsio_get_interface_description(void)
 {
     return &tlsio_openssl_interface_description;

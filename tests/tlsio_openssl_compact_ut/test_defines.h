@@ -1,3 +1,5 @@
+#define SETOPTION_PV_COUNT 3
+
 #define OPEN_PV_COUNT 4
 typedef struct
 {

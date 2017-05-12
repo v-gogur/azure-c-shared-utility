@@ -211,14 +211,146 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
         TEST_MUTEX_RELEASE(g_testByTest);
     }
 
-    TEST_FUNCTION(tlsio_openssl__create_parameter_validation_fails__fails)
+    TEST_FUNCTION(tlsio_openssl_compact__open_parameter_validation_fails__fails)
+    {
+        ///arrange
+        const IO_INTERFACE_DESCRIPTION* tlsio_id = tlsio_get_interface_description();
+        TLSIO_CONFIG config = { SSL_good_host_name, SSL_good_port_number, NULL, NULL };
+
+        // Parameters arrays
+        bool p0[OPEN_PV_COUNT];
+        ON_IO_OPEN_COMPLETE p1[OPEN_PV_COUNT];
+        ON_BYTES_RECEIVED p2[OPEN_PV_COUNT];
+        ON_IO_ERROR p3[OPEN_PV_COUNT];
+        const char* fm[OPEN_PV_COUNT];
+
+        int k = 0;
+        p0[k] = false; p1[k] = on_io_open_complete; p2[k] = on_bytes_received; p3[k] = on_io_error; fm[k] = "Unexpected open success when tlsio_handle is NULL"; /* */  k++;
+        p0[k] = true; p1[k] = NULL; /*           */ p2[k] = on_bytes_received; p3[k] = on_io_error; fm[k] = "Unexpected open success when on_io_open_complete is NULL"; k++;
+        p0[k] = true; p1[k] = on_io_open_complete; p2[k] = NULL; /*         */ p3[k] = on_io_error; fm[k] = "Unexpected open success when on_bytes_received is NULL"; k++;
+        p0[k] = true; p1[k] = on_io_open_complete; p2[k] = on_bytes_received; p3[k] = NULL; /*   */ fm[k] = "Unexpected open success when on_io_error is NULL"; /*   */ k++;
+
+        // Cycle through each failing combo of parameters
+        for (int i = 0; i < OPEN_PV_COUNT; i++)
+        {
+            ///arrange
+            CONCRETE_IO_HANDLE tlsio = tlsio_id->concrete_io_create(&config);
+
+            ///act
+            int open_result = tlsio_id->concrete_io_open(p0[i] ? tlsio : NULL, p1[i], IO_OPEN_COMPLETE_CONTEXT, p2[i],
+                IO_BYTES_RECEIVED_CONTEXT, p3[i], IO_ERROR_CONTEXT);
+
+            ///assert
+            ASSERT_ARE_NOT_EQUAL_WITH_MSG(int, open_result, 0, fm[i]);
+
+            ///cleanup
+            tlsio_id->concrete_io_destroy(tlsio);
+        }
+    }
+
+    /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_123 [ The tlsio_openssl_compact_setoption shall do nothing and return 0. ]*/
+    TEST_FUNCTION(tlsio_openssl_compact__setoption__succeeds)
+    {
+        ///arrange
+        const IO_INTERFACE_DESCRIPTION* tlsio_id = tlsio_get_interface_description();
+        TLSIO_CONFIG config = { SSL_good_host_name, SSL_good_port_number, NULL, NULL };
+        CONCRETE_IO_HANDLE tlsio = tlsio_id->concrete_io_create(&config);
+        ASSERT_IS_NOT_NULL(tlsio);
+        umock_c_reset_all_calls();
+
+        ///act
+        int result = tlsio_id->concrete_io_setoption(tlsio, "fake name", "fake value");
+
+        ///assert
+        ASSERT_ARE_EQUAL(int, 0, result);
+
+        ///cleanup
+        tlsio_id->concrete_io_destroy(tlsio);
+    }
+
+    /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_120: [ If the tlsio_handle parameter is NULL, tlsio_openssl_compact_setoption shall do nothing except log an error and return FAILURE. ]*/
+    /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_121: [ If the optionName parameter is NULL, tlsio_openssl_compact_setoption shall do nothing except log an error and return FAILURE. ]*/
+    /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_122: [ If the value parameter is NULL, tlsio_openssl_compact_setoption shall do nothing except log an error and return FAILURE. ]*/
+    TEST_FUNCTION(tlsio_openssl_compact__setoption_parameter_validation__fails)
+    {
+        ///arrange
+        const IO_INTERFACE_DESCRIPTION* tlsio_id = tlsio_get_interface_description();
+        TLSIO_CONFIG config = { SSL_good_host_name, SSL_good_port_number, NULL, NULL };
+        umock_c_reset_all_calls();
+
+        // Parameters arrays
+        bool p0[SETOPTION_PV_COUNT];
+        const char* p1[SETOPTION_PV_COUNT];
+        const char*  p2[SETOPTION_PV_COUNT];
+        const char* fm[SETOPTION_PV_COUNT];
+
+        int k = 0;
+        p0[k] = false; p1[k] = "fake name"; p2[k] = "fake value"; fm[k] = "Unexpected setoption success when tlsio_handle is NULL"; /* */  k++;
+        p0[k] = true; p1[k] = NULL; /*   */ p2[k] = "fake value"; fm[k] = "Unexpected setoption success when option_name is NULL"; /*  */  k++;
+        p0[k] = true; p1[k] = "fake name"; p2[k] = NULL; /*    */ fm[k] = "Unexpected setoption success when option_value is NULL"; /* */  k++;
+
+
+        // Cycle through each failing combo of parameters
+        for (int i = 0; i < SETOPTION_PV_COUNT; i++)
+        {
+            ///arrange
+            CONCRETE_IO_HANDLE tlsio = tlsio_id->concrete_io_create(&config);
+            ASSERT_IS_NOT_NULL(tlsio);
+            ///act
+
+            int result = tlsio_id->concrete_io_setoption(p0[i] ? tlsio : NULL, p1[i], p2[i]);
+
+            ///assert
+            ASSERT_ARE_NOT_EQUAL_WITH_MSG(int, 0, result, fm[i]);
+
+            ///cleanup
+            tlsio_id->concrete_io_destroy(tlsio);
+        }
+    }
+
+    /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_160: [ If the tlsio_handle parameter is NULL, tlsio_openssl_compact_retrieveoptions shall do nothing except log an error and return FAILURE. ]*/
+    TEST_FUNCTION(tlsio_openssl_compact__retrieveoptions_parameter_validation__fails)
+    {
+        ///arrange
+        const IO_INTERFACE_DESCRIPTION* tlsio_id = tlsio_get_interface_description();
+
+        ///act
+        OPTIONHANDLER_HANDLE result = tlsio_id->concrete_io_retrieveoptions(NULL);
+
+        ///assert
+        ASSERT_IS_NULL((void*)result);
+
+        ///cleanup
+    }
+
+    /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_161: [ The tlsio_openssl_compact_retrieveoptions shall do nothing and return NULL. ]*/
+    TEST_FUNCTION(tlsio_openssl_compact__retrieveoptions__fails)
+    {
+        ///arrange
+        const IO_INTERFACE_DESCRIPTION* tlsio_id = tlsio_get_interface_description();
+        TLSIO_CONFIG config = { SSL_good_host_name, SSL_good_port_number, NULL, NULL };
+        CONCRETE_IO_HANDLE tlsio = tlsio_id->concrete_io_create(&config);
+        ASSERT_IS_NOT_NULL(tlsio);
+        umock_c_reset_all_calls();
+
+        ///act
+        OPTIONHANDLER_HANDLE result = tlsio_id->concrete_io_retrieveoptions(tlsio);
+
+        ///assert
+        ASSERT_IS_NULL((void*)result);
+
+        ///cleanup
+        tlsio_id->concrete_io_destroy(tlsio);
+    }
+
+    TEST_FUNCTION(tlsio_openssl_compact__create_parameter_validation_fails__fails)
     {
         ///arrange
         const IO_INTERFACE_DESCRIPTION* tlsio_id = tlsio_get_interface_description();
         TLSIO_CONFIG config[4];
         create_parameters_t p[4];
-        populate_create_parameters(p + 0, NULL,       SSL_good_host_name, SSL_good_port_number, "Should fail with NULL config");
-        populate_create_parameters(p + 1, config + 1, NULL,               SSL_good_port_number, "Should fail with NULL hostname");
+        populate_create_parameters(p + 0, NULL, SSL_good_host_name, SSL_good_port_number, "Should fail with NULL config");
+        populate_create_parameters(p + 1, config + 1, NULL, SSL_good_port_number, "Should fail with NULL hostname");
         populate_create_parameters(p + 2, config + 2, SSL_good_host_name, SSL_port_number_too_low, "Should fail with port number too low");
         populate_create_parameters(p + 3, config + 3, SSL_good_host_name, SSL_port_number_too_high, "Should fail with port number too high");
 
@@ -233,7 +365,7 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
         }
     }
 
-    TEST_FUNCTION(tlsio_openssl__create_unhappy_paths__fails)
+    TEST_FUNCTION(tlsio_openssl_compact__create_unhappy_paths__fails)
     {
         ///arrange
         int negativeTestsInitResult = umock_c_negative_tests_init();
@@ -264,7 +396,7 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
         umock_c_negative_tests_deinit();
     }
 
-    TEST_FUNCTION(tlsio_openssl__create__succeeds)
+    TEST_FUNCTION(tlsio_openssl_compact__create__succeeds)
     {
         ///arrange
         const IO_INTERFACE_DESCRIPTION* tlsio_id = tlsio_get_interface_description();
@@ -273,6 +405,7 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
         STRICT_EXPECTED_CALL(gballoc_malloc(IGNORED_NUM_ARG));  // concrete_io struct
         STRICT_EXPECTED_CALL(gballoc_malloc(IGNORED_NUM_ARG));  // copy hostname
         STRICT_EXPECTED_CALL(gballoc_malloc(IGNORED_NUM_ARG));  // singlylinkedlist_create
+        //
 
         ///act
         CONCRETE_IO_HANDLE result = tlsio_id->concrete_io_create(&config);
@@ -285,43 +418,7 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
         tlsio_id->concrete_io_destroy(result);
     }
 
-    TEST_FUNCTION(tlsio_openssl__open_parameter_validation_fails__fails)
-    {
-        ///arrange
-        const IO_INTERFACE_DESCRIPTION* tlsio_id = tlsio_get_interface_description();
-        TLSIO_CONFIG config = { SSL_good_host_name, SSL_good_port_number, NULL, NULL };
-
-        // Parameters arrays
-        bool p0[OPEN_PV_COUNT];
-        ON_IO_OPEN_COMPLETE p1[OPEN_PV_COUNT];
-        ON_BYTES_RECEIVED p2[OPEN_PV_COUNT];
-        ON_IO_ERROR p3[OPEN_PV_COUNT];
-        const char* fm[OPEN_PV_COUNT];
-
-        p0[0] = false; p1[0] = on_io_open_complete; p2[0] = on_bytes_received; p3[0] = on_io_error; fm[0] = "Unexpected open success when tlsio_handle is NULL";
-        p0[1] = true; p1[1] = NULL; /*           */ p2[1] = on_bytes_received; p3[1] = on_io_error; fm[1] = "Unexpected open success when on_io_open_complete is NULL";
-        p0[2] = true; p1[2] = on_io_open_complete; p2[2] = NULL; /*         */ p3[2] = on_io_error; fm[2] = "Unexpected open success when on_bytes_received is NULL";
-        p0[3] = true; p1[3] = on_io_open_complete; p2[3] = on_bytes_received; p3[3] = NULL; /*   */ fm[3] = "Unexpected open success when on_io_error is NULL";
-
-        // Cycle through each failing combo of parameters
-        for (int i = 0; i < OPEN_PV_COUNT; i++)
-        {
-            ///arrange
-            CONCRETE_IO_HANDLE tlsio = tlsio_id->concrete_io_create(&config);
-
-            ///act
-            int open_result = tlsio_id->concrete_io_open(p0[i] ? tlsio : NULL, p1[i], IO_OPEN_COMPLETE_CONTEXT, p2[i],
-                IO_BYTES_RECEIVED_CONTEXT, p3[i], IO_ERROR_CONTEXT);
-
-            ///assert
-            ASSERT_ARE_NOT_EQUAL_WITH_MSG(int, open_result, 0, fm[i]);
-
-            ///cleanup
-            tlsio_id->concrete_io_destroy(tlsio);
-        }
-    }
-
-    TEST_FUNCTION(tlsio_openssl__destroy_unopened__succeeds)
+    TEST_FUNCTION(tlsio_openssl_compact__destroy_unopened__succeeds)
     {
         ///arrange
         const IO_INTERFACE_DESCRIPTION* tlsio_id = tlsio_get_interface_description();
@@ -333,8 +430,9 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
         STRICT_EXPECTED_CALL(gballoc_free(IGNORED_NUM_ARG));  // copy hostname
         STRICT_EXPECTED_CALL(gballoc_free(IGNORED_NUM_ARG));  // singlylinkedlist_create
         STRICT_EXPECTED_CALL(gballoc_free(IGNORED_NUM_ARG));  // concrete_io struct
+        //
 
-                                                              ///act
+        ///act
         tlsio_id->concrete_io_destroy(result);
 
         ///assert
@@ -343,14 +441,14 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
         ///cleanup
     }
 
-    /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30XX_008: [ The tlsio_get_interface_description shall return the VTable IO_INTERFACE_DESCRIPTION. ]*/
-    TEST_FUNCTION(tlsio_openssl__tlsio_get_interface_description)
+    /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_008: [ The tlsio_get_interface_description shall return the VTable IO_INTERFACE_DESCRIPTION. ]*/
+    TEST_FUNCTION(tlsio_openssl_compact__tlsio_get_interface_description)
     {
         ///act
         const IO_INTERFACE_DESCRIPTION* tlsio_id = tlsio_get_interface_description();
 
         ///assert
-        /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30XX_001: [ The tlsio_openssl_compact shall implement and export all the Concrete functions in the VTable IO_INTERFACE_DESCRIPTION defined in the xio.h. ] */
+        /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_001: [ The tlsio_openssl_compact shall implement and export all the Concrete functions in the VTable IO_INTERFACE_DESCRIPTION defined in the xio.h. ] */
         // Later specific tests will verify the identity of each function
         ASSERT_IS_NOT_NULL(tlsio_id->concrete_io_close);
         ASSERT_IS_NOT_NULL(tlsio_id->concrete_io_create);
