@@ -212,17 +212,17 @@ void tlsio_openssl_destroy(CONCRETE_IO_HANDLE tls_io)
     TLS_IO_INSTANCE* tls_io_instance = (TLS_IO_INSTANCE*)tls_io;
     if (tls_io_instance == NULL)
     {
-        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30XX_016: [ If tlsio_handle is NULL, tlsio_openssl_compact_destroy shall do nothing. ]*/
+        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_020: [ If tlsio_handle is NULL, tlsio_openssl_compact_destroy shall do nothing. ]*/
         LogError(null_tlsio_message);
     }
     else
     {
         if (tls_io_instance->tlsio_state == TLSIO_STATE_OPEN)
         {
-            /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30XX_018: [ If tlsio_openssl_compact_close has not been called before concrete_io_destroy, concrete_io_destroy shall log an error. ]*/
+            /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_022: [ If tlsio_openssl_compact_close has not been called before concrete_io_destroy, concrete_io_destroy shall additionally log an error. ]*/
             LogError("tlsio_openssl_destroy called while TLSIO_STATE_OPEN.");
         }
-        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30XX_017:  [ The tlsio_openssl_compact_destroy shall release all allocated resources and then release tlsio_handle. ]*/
+        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_021: [ The tlsio_openssl_compact_destroy shall release all allocated resources and then release tlsio_handle. ]*/
         internal_close(tls_io_instance);
 
         // NOTE: certificate and pk handling will not be specified until x509 support is added.
@@ -250,6 +250,7 @@ void tlsio_openssl_destroy(CONCRETE_IO_HANDLE tls_io)
             tls_io_instance->pending_io_list = NULL;
         }
 
+        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_021: [ The tlsio_openssl_compact_destroy shall release all allocated resources and then release tlsio_handle. ]*/
         free(tls_io_instance);
     }
 }

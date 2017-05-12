@@ -418,6 +418,22 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
         tlsio_id->concrete_io_destroy(result);
     }
 
+    /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_020: [ If tlsio_handle is NULL, tlsio_openssl_compact_destroy shall do nothing. ]*/
+    TEST_FUNCTION(tlsio_openssl_compact__destroy_parameter_validation__fails)
+    {
+        ///arrange
+        const IO_INTERFACE_DESCRIPTION* tlsio_id = tlsio_get_interface_description();
+
+        ///act
+        tlsio_id->concrete_io_destroy(NULL);
+
+        ///assert
+        // can't really check anything here
+
+        ///cleanup
+    }
+
+    /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_021: [ The tlsio_openssl_compact_destroy shall release all allocated resources and then release tlsio_handle. ]*/
     TEST_FUNCTION(tlsio_openssl_compact__destroy_unopened__succeeds)
     {
         ///arrange
