@@ -1,6 +1,9 @@
 #define SETOPTION_PV_COUNT 3
 #define OPEN_PV_COUNT 4
 
+static TLSIO_CONFIG good_config = { SSL_good_host_name, SSL_good_port_number, NULL, NULL };
+
+
 typedef struct
 {
     TLSIO_CONFIG* config;

@@ -70,22 +70,15 @@ static void reset_callback_context_records()
 
 // Callbacks used by the tlsio adapter
 
-/* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_004: [ The tlsio_openssl_compact shall call the callbacks functions defined in the xio.h ]*/
-/* Tests_SRS_SRS_TLSIO_OPENSSL_COMPACT_30_006: [ The tlsio_openssl_compact shall return the status of all async operations using the callbacks. ]*/
 static void on_io_open_complete(void* context, IO_OPEN_RESULT open_result)
 {
-    /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_002: [ The tlsio_openssl_compact shall report the open operation status using the IO_OPEN_RESULT enumerator defined in the xio.h ]*/
     bool result_valid = open_result == IO_OPEN_OK || open_result == IO_OPEN_ERROR;
     ASSERT_IS_TRUE_WITH_MSG(result_valid, "Invalid IO_OPEN_RESULT");
     on_io_open_complete_call_count++;
     on_io_open_complete_result = open_result;
-    /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_028: [ If tlsio_openssl_compact_open calls on_io_open_complete, it shall always pass the provided on_io_open_complete_context parameter. ]*/
     on_io_open_complete_context_ok = context == IO_OPEN_COMPLETE_CONTEXT;
 }
 
-/* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_004: [ The tlsio_openssl_compact shall call the callbacks functions defined in the xio.h ]*/
-/* Tests_SRS_SRS_TLSIO_OPENSSL_COMPACT_30_006: [ The tlsio_openssl_compact shall return the status of all async operations using the callbacks. ]*/
-/* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_042: [ The tlsio_openssl_compact_dowork shall supply the provided callback_context when it calls on_send_complete. ]*/
 static void on_io_send_complete(void* context, IO_SEND_RESULT send_result)
 {
     on_io_send_complete_call_count++;
@@ -93,18 +86,12 @@ static void on_io_send_complete(void* context, IO_SEND_RESULT send_result)
     on_io_send_complete_result = send_result;
 }
 
-/* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_004: [ The tlsio_openssl_compact shall call the callbacks functions defined in the xio.h ]*/
-/* Tests_SRS_SRS_TLSIO_OPENSSL_COMPACT_30_006: [ The tlsio_openssl_compact shall return the status of all async operations using the callbacks. ]*/
-/* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_037: [ If on_io_close_complete is provided, tlsio_openssl_compact_close shall call on_io_close_complete. ] */
-/* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_038: [ If on_io_close_complete is provided, tlsio_openssl_compact_close shall pass the callback_context handle into the on_io_close_complete call. ] */
 static void on_io_close_complete(void* context)
 {
     on_io_close_call_count++;
     on_io_close_context_ok = context == IO_CLOSE_COMPLETE_CONTEXT;
 }
 
-/* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_004: [ The tlsio_openssl_compact shall call the callbacks functions defined in the xio.h ]*/
-/* Tests_SRS_SRS_TLSIO_OPENSSL_COMPACT_30_006: [ The tlsio_openssl_compact shall return the status of all async operations using the callbacks. ]*/
 static void on_bytes_received(void* context, const unsigned char* buffer, size_t size)
 {
     on_bytes_received_call_count++;
@@ -122,8 +109,6 @@ static void on_bytes_received(void* context, const unsigned char* buffer, size_t
     size;
 }
 
-/* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_004: [ The tlsio_openssl_compact shall call the callbacks functions defined in the xio.h ]*/
-/* Tests_SRS_SRS_TLSIO_OPENSSL_COMPACT_30_006: [ The tlsio_openssl_compact shall return the status of all async operations using the callbacks. ]*/
 static void on_io_error(void* context)
 {
     on_io_error_call_count = true;

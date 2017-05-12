@@ -334,7 +334,6 @@ CONCRETE_IO_HANDLE tlsio_openssl_create(void* io_create_parameters)
 }
 
 
-/* Codes_SRS_TLSIO_OPENSSL_COMPACT_30XX_004: [ The tlsio_openssl_compact shall call the callbacks functions defined in the xio.h ]*/
 int tlsio_openssl_open(CONCRETE_IO_HANDLE tls_io,
     ON_IO_OPEN_COMPLETE on_io_open_complete, void* on_io_open_complete_context,
     ON_BYTES_RECEIVED on_bytes_received, void* on_bytes_received_context,
@@ -345,7 +344,7 @@ int tlsio_openssl_open(CONCRETE_IO_HANDLE tls_io,
     TLS_IO_INSTANCE* tls_io_instance = (TLS_IO_INSTANCE*)tls_io;
     if (tls_io == NULL)
     {
-        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30XX_019: [ If the tlsio_handle parameter is NULL, tlsio_openssl_compact_open shall log an error and return FAILURE. ]*/
+        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_030: [ If the tlsio_handle parameter is NULL, tlsio_openssl_compact_open shall log an error and return FAILURE. ]*/
         result = __FAILURE__;
         LogError(null_tlsio_message);
     }
@@ -354,7 +353,7 @@ int tlsio_openssl_open(CONCRETE_IO_HANDLE tls_io,
         tls_io_instance->operation_timeout_end_time = get_time(NULL) + TLSIO_OPERATION_TIMEOUT_SECONDS;
         if (on_io_open_complete == NULL)
         {
-            /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30XX_074: [ If the on_io_open_complete parameter is NULL, tlsio_openssl_compact_open shall log an error and return FAILURE. ]*/
+            /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_031: [ If the on_io_open_complete parameter is NULL, tlsio_openssl_compact_open shall log an error and return FAILURE. ]*/
             LogError("Required parameter on_io_open_complete is NULL");
             result = __FAILURE__;
         }
@@ -362,7 +361,7 @@ int tlsio_openssl_open(CONCRETE_IO_HANDLE tls_io,
         {
             if (on_bytes_received == NULL)
             {
-                /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30XX_052: [ If the on_io_error parameter is NULL, tlsio_openssl_compact_open shall log an error and return FAILURE. ]*/
+                /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_032: [ If the on_bytes_received parameter is NULL, tlsio_openssl_compact_open shall log an error and return FAILURE. ]*/
                 LogError("Required parameter on_bytes_received is NULL");
                 result = __FAILURE__;
             }
@@ -370,7 +369,7 @@ int tlsio_openssl_open(CONCRETE_IO_HANDLE tls_io,
             {
                 if (on_io_error == NULL)
                 {
-                    /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30XX_020: [ If the on_bytes_received parameter is NULL, tlsio_openssl_compact_open shall log an error and return FAILURE. ]*/
+                    /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_033: [ If the on_io_error parameter is NULL, tlsio_openssl_compact_open shall log an error and return FAILURE. ]*/
                     LogError("Required parameter on_io_error is NULL");
                     result = __FAILURE__;
                 }
@@ -378,30 +377,26 @@ int tlsio_openssl_open(CONCRETE_IO_HANDLE tls_io,
                 {
                     if (tls_io_instance->tlsio_state != TLSIO_STATE_NOT_OPEN)
                     {
-                        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30XX_029: [ If tlsio_openssl_compact_open has already been called, it shall log an error, and return FAILURE. ]*/
+                        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_037: [ If tlsio_openssl_compact_open has already been called, it shall log an error, and return FAILURE. ]*/
                         LogError("Invalid tlsio_state. Expected state is TLSIO_STATE_NOT_OPEN.");
                         result = __FAILURE__;
                     }
                     else
                     {
-                        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30XX_022: [ The tlsio_openssl_compact_open shall store the provided on_bytes_received callback function address. ]*/
-                        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30XX_023: [ The tlsio_openssl_compact_open shall store the provided on_bytes_received_context handle. ]*/
+                        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_034: [ The tlsio_openssl_compact_open shall store the provided on_bytes_received, on_bytes_received_context, on_io_error, on_io_error_context, on_io_open_complete, and on_io_open_complete_context parameters for later use as specified and tested per other line entries in this document. ]*/
                         tls_io_instance->on_bytes_received = on_bytes_received;
                         tls_io_instance->on_bytes_received_context = on_bytes_received_context;
 
-                        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30XX_024: [ The tlsio_openssl_compact_open shall store the provided on_io_error callback function address. ]*/
-                        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30XX_025: [ The tlsio_openssl_compact_open shall store the provided on_io_error_context handle. ]*/
                         tls_io_instance->on_io_error = on_io_error;
                         tls_io_instance->on_io_error_context = on_io_error_context;
 
-                        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30XX_077: [ The tlsio_openssl_compact_open shall store the provided on_io_open_complete callback function address. ]*/
-                        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30XX_078: [ The tlsio_openssl_compact_open shall store the provided on_io_open_complete_context handle. ]*/
                         tls_io_instance->on_open_complete = on_io_open_complete;
                         tls_io_instance->on_open_complete_context = on_io_open_complete_context;
 
-                        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30XX_026: [ If tlsio_openssl_compact_open successfully begins opening the ssl connection, it shall return 0. ]*/
+                        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_035: [ The tlsio_openssl_compact_open shall begin the process of opening the ssl connection with the host provided in the tlsio_openssl_compact_create call. ]*/
                         // All the real work happens in dowork
                         tls_io_instance->tlsio_state = TLSIO_STATE_OPENING_BEGIN;
+                        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_036: [ If tlsio_openssl_compact_open successfully begins opening the OpenSSL connection, it shall return 0. ]*/
                         result = 0;
                     }
                 }
@@ -411,7 +406,7 @@ int tlsio_openssl_open(CONCRETE_IO_HANDLE tls_io,
 
     if (result != 0 && on_io_open_complete != NULL)
     {
-        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30XX_0026: [ If tlsio_openssl_compact_open successfully begins opening the ssl connection, it shall return 0. ]*/
+        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_038: [ If the tlsio_openssl_compact_open returns FAILURE it shall call on_io_open_complete with the provided on_io_open_complete_context and IO_OPEN_ERROR. ]*/
         on_io_open_complete(on_io_open_complete_context, IO_OPEN_ERROR);
     }
 
