@@ -349,8 +349,12 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
         const IO_INTERFACE_DESCRIPTION* tlsio_id = tlsio_get_interface_description();
         TLSIO_CONFIG config[4];
         create_parameters_t p[4];
-        populate_create_parameters(p + 0, NULL, SSL_good_host_name, SSL_good_port_number, "Should fail with NULL config");
-        populate_create_parameters(p + 1, config + 1, NULL, SSL_good_port_number, "Should fail with NULL hostname");
+        /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_013: [ If the io_create_parameters value is NULL, tlsio_openssl_compact_create shall log an error and return NULL. ]*/
+        /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_014: [ If the hostname member of io_create_parameters value is NULL, tlsio_openssl_compact_create shall log an error and return NULL. ]*/
+        /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_015: [ If the port member of io_create_parameters value is less than 0 or greater than 0xffff, tlsio_openssl_compact_create shall log an error and return NULL. ]*/
+        //                               config       hostname            port number                failure message
+        populate_create_parameters(p + 0, NULL, /* */ SSL_good_host_name, SSL_good_port_number, "Should fail with NULL config");
+        populate_create_parameters(p + 1, config + 1, NULL, /*         */ SSL_good_port_number, "Should fail with NULL hostname");
         populate_create_parameters(p + 2, config + 2, SSL_good_host_name, SSL_port_number_too_low, "Should fail with port number too low");
         populate_create_parameters(p + 3, config + 3, SSL_good_host_name, SSL_port_number_too_high, "Should fail with port number too high");
 
@@ -365,6 +369,7 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
         }
     }
 
+    /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_011: [ If any resource allocation fails, tlsio_openssl_compact_create shall return NULL. ]*/
     TEST_FUNCTION(tlsio_openssl_compact__create_unhappy_paths__fails)
     {
         ///arrange
@@ -379,7 +384,6 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
         STRICT_EXPECTED_CALL(gballoc_malloc(IGNORED_NUM_ARG));  // singlylinkedlist_create
         umock_c_negative_tests_snapshot();
 
-        // Skip the failing of the first call
         for (unsigned int i = 0; i < umock_c_negative_tests_call_count(); i++)
         {
             umock_c_negative_tests_reset();
@@ -396,6 +400,7 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
         umock_c_negative_tests_deinit();
     }
 
+    /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_010: [ The tlsio_openssl_compact_create shall allocate and initialize all necessary resources and return an instance of the tlsio_openssl_compact. ]*/
     TEST_FUNCTION(tlsio_openssl_compact__create__succeeds)
     {
         ///arrange
@@ -403,6 +408,7 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
         TLSIO_CONFIG config = { SSL_good_host_name, SSL_good_port_number, NULL, NULL };
 
         STRICT_EXPECTED_CALL(gballoc_malloc(IGNORED_NUM_ARG));  // concrete_io struct
+        /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_016: [ tlsio_openssl_compact_create shall make a copy of the hostname member of io_create_parameters to allow deletion of hostname immediately after the call. ]*/
         STRICT_EXPECTED_CALL(gballoc_malloc(IGNORED_NUM_ARG));  // copy hostname
         STRICT_EXPECTED_CALL(gballoc_malloc(IGNORED_NUM_ARG));  // singlylinkedlist_create
         //

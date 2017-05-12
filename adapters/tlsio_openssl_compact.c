@@ -255,18 +255,16 @@ void tlsio_openssl_destroy(CONCRETE_IO_HANDLE tls_io)
     }
 }
 
-/* Codes_SRS_TLSIO_OPENSSL_COMPACT_30XX_009: [ The tlsio_openssl_compact_create shall allocate and initialize all necessary resources and return an instance of the tlsio_openssl_compact. ]*/
-/* Codes_SRS_TLSIO_OPENSSL_COMPACT_30XX_005: [ The tlsio_openssl_compact shall receive the connection information using the TLSIO_CONFIG structure defined in tlsio.h ]*/
+/* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_010: [ The tlsio_openssl_compact_create shall allocate and initialize all necessary resources and return an instance of the tlsio_openssl_compact. ]*/
 CONCRETE_IO_HANDLE tlsio_openssl_create(void* io_create_parameters)
 {
-    /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30XX_005: [ The tlsio_openssl_compact shall receive the connection information using the TLSIO_CONFIG structure defined in tlsio.h ]*/
-    /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30XX_012: [ The tlsio_openssl_compact_create shall receive the connection configuration (TLSIO_CONFIG). ]*/
+    /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_012: [ The tlsio_openssl_compact_create shall receive the connection configuration as a TLSIO_CONFIG* in io_create_parameters. ]*/
     TLSIO_CONFIG* tls_io_config = (TLSIO_CONFIG*)io_create_parameters;
     TLS_IO_INSTANCE* result;
 
-    /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30XX_0073: [ If the hostname member of io_create_parameters value is NULL, tlsio_openssl_compact_create shall log an error and return NULL. ]*/
     if (io_create_parameters == NULL)
     {
+        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_013: [ If the io_create_parameters value is NULL, tlsio_openssl_compact_create shall log an error and return NULL. ]*/
         LogError("NULL tls_io_config");
         result = NULL;
     }
@@ -274,6 +272,7 @@ CONCRETE_IO_HANDLE tlsio_openssl_create(void* io_create_parameters)
     {
         if (tls_io_config->hostname == NULL)
         {
+            /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_014: [ If the hostname member of io_create_parameters value is NULL, tlsio_openssl_compact_create shall log an error and return NULL. ]*/
             LogError("NULL tls_io_config->hostname");
             result = NULL;
         }
@@ -281,6 +280,7 @@ CONCRETE_IO_HANDLE tlsio_openssl_create(void* io_create_parameters)
         {
             if (tls_io_config->port < 0 || tls_io_config->port > MAX_VALID_PORT)
             {
+                /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_015: [ If the port member of io_create_parameters value is less than 0 or greater than 0xffff, tlsio_openssl_compact_create shall log an error and return NULL. ]*/
                 LogError("tls_io_config->port out of range");
                 result = NULL;
             }
@@ -289,12 +289,11 @@ CONCRETE_IO_HANDLE tlsio_openssl_create(void* io_create_parameters)
                 result = malloc(sizeof(TLS_IO_INSTANCE));
                 if (result == NULL)
                 {
-                    /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30XX_010: [ If any resource allocation fails, tlsio_openssl_compact_create shall return NULL. ]*/
+                    /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_011: [ If any resource allocation fails, tlsio_openssl_compact_create shall return NULL. ]*/
                     LogError(allocate_fail_message);
                 }
                 else
                 {
-                    /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30XX_011: [ The tlsio_openssl_compact_create shall initialize all internal callback pointers as NULL. ]*/
                     memset(result, 0, sizeof(TLS_IO_INSTANCE));
                     result->struct_size = sizeof(TLS_IO_INSTANCE);
                     result->host_ipV4_address = 0;
@@ -307,18 +306,20 @@ CONCRETE_IO_HANDLE tlsio_openssl_create(void* io_create_parameters)
                     result->hostname = (char*)malloc(strlen(tls_io_config->hostname) + 1);
                     if (result->hostname == NULL)
                     {
-                        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30XX_011: [ The tlsio_openssl_compact_create shall initialize all internal callback pointers as NULL. ]*/
+                        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_011: [ If any resource allocation fails, tlsio_openssl_compact_create shall return NULL. ]*/
                         LogError(allocate_fail_message);
                         tlsio_openssl_destroy(result);
                         result = NULL;
                     }
                     else
                     {
+                        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_016: [ tlsio_openssl_compact_create shall make a copy of the hostname member of io_create_parameters to allow deletion of hostname immediately after the call. ]*/
                         (void)strcpy(result->hostname, tls_io_config->hostname);
+                        // Create the message queue
                         result->pending_io_list = singlylinkedlist_create();
                         if (result->pending_io_list == NULL)
                         {
-                            /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30XX_011: [ The tlsio_openssl_compact_create shall initialize all internal callback pointers as NULL. ]*/
+                            /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_011: [ If any resource allocation fails, tlsio_openssl_compact_create shall return NULL. ]*/
                             LogError("Failed singlylinkedlist_create");
                             tlsio_openssl_destroy(result);
                             result = NULL;
