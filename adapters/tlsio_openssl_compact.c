@@ -156,11 +156,6 @@ static void internal_close(TLS_IO_INSTANCE* tls_io_instance)
         (void)SSL_shutdown(tls_io_instance->ssl);
     }
 
-    if (tls_io_instance->hostname != NULL)
-    {
-        free(tls_io_instance->hostname);
-        tls_io_instance->hostname = NULL;
-    }
     if (tls_io_instance->dns != NULL)
     {
         dns_async_destroy(tls_io_instance->dns);
@@ -228,6 +223,12 @@ void tlsio_openssl_destroy(CONCRETE_IO_HANDLE tls_io)
         }
         /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_021: [ The tlsio_openssl_compact_destroy shall release all allocated resources and then release tlsio_handle. ]*/
         internal_close(tls_io_instance);
+
+        if (tls_io_instance->hostname != NULL)
+        {
+            free(tls_io_instance->hostname);
+            tls_io_instance->hostname = NULL;
+        }
 
         // NOTE: certificate and pk handling will not be specified until x509 support is added.
         // There is currently no way for any of these members to become non-NULL.
