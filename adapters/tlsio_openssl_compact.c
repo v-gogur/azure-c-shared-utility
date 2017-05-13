@@ -72,7 +72,7 @@ typedef struct TLS_IO_INSTANCE_TAG
     SSL_CTX* ssl_context;
     TLSIO_STATE tlsio_state;
     uint32_t host_ipV4_address;
-    DNS_ASYNC_HANDLE dns;
+    char* hostname;
     uint16_t port;
     time_t operation_timeout_end_time;
     char* certificate;
@@ -155,10 +155,10 @@ static void internal_close(TLS_IO_INSTANCE* tls_io_instance)
         (void)SSL_shutdown(tls_io_instance->ssl);
     }
 
-    if (tls_io_instance->dns != NULL)
+    if (tls_io_instance->hostname != NULL)
     {
-        dns_async_destroy(tls_io_instance->dns);
-        tls_io_instance->dns = NULL;
+        free(tls_io_instance->hostname);
+        tls_io_instance->hostname = NULL;
     }
     if (tls_io_instance->ssl != NULL)
     {
@@ -298,21 +298,21 @@ CONCRETE_IO_HANDLE tlsio_openssl_create(void* io_create_parameters)
                     result->port = (uint16_t)tls_io_config->port;
                     result->tlsio_state = TLSIO_STATE_NOT_OPEN;
                     result->sock = SOCKET_ASYNC_INVALID_SOCKET;
-                    result->dns = NULL;
+                    result->hostname = NULL;
                     result->pending_io_list = NULL;
                     result->operation_timeout_end_time = 0;
-                    /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_016: [ tlsio_openssl_compact_create shall make a copy of the hostname member of io_create_parameters to allow deletion of hostname immediately after the call. ]*/
-                    // dns_async_create copies the hostname
-                    result->dns = dns_async_create(tls_io_config->hostname, NULL);
-                    if (result->dns == NULL)
+                    result->hostname = (char*)malloc(strlen(tls_io_config->hostname) + 1);
+                    if (result->hostname == NULL)
                     {
                         /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_011: [ If any resource allocation fails, tlsio_openssl_compact_create shall return NULL. ]*/
-                        LogError("Failed dns_async_create");
+                        LogError(allocate_fail_message);
                         tlsio_openssl_destroy(result);
                         result = NULL;
                     }
                     else
                     {
+                        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_016: [ tlsio_openssl_compact_create shall make a copy of the hostname member of io_create_parameters to allow deletion of hostname immediately after the call. ]*/
+                        (void)strcpy(result->hostname, tls_io_config->hostname);
                         // Create the message queue
                         result->pending_io_list = singlylinkedlist_create();
                         if (result->pending_io_list == NULL)
