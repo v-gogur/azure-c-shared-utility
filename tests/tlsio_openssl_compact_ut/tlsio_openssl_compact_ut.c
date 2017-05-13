@@ -349,7 +349,7 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
 
             ///assert
             ASSERT_ARE_NOT_EQUAL_WITH_MSG(int, open_result, 0, fm[i]);
-            /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_038: [If the tlsio_openssl_compact_open returns FAILURE it shall call on_io_open_complete with the provided on_io_open_complete_context and IO_OPEN_ERROR.]*/
+            /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_039: [If the tlsio_openssl_compact_open returns FAILURE it shall call on_io_open_complete with the provided on_io_open_complete_context and IO_OPEN_ERROR.]*/
             ASSERT_IO_OPEN_CALLBACK(p1[i] != NULL, IO_OPEN_ERROR);
 
             ///cleanup

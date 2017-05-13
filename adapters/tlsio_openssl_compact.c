@@ -72,6 +72,7 @@ typedef struct TLS_IO_INSTANCE_TAG
     SSL_CTX* ssl_context;
     TLSIO_STATE tlsio_state;
     uint32_t host_ipV4_address;
+    DNS_ASYNC_HANDLE dns;
     char* hostname;
     uint16_t port;
     time_t operation_timeout_end_time;
@@ -159,6 +160,11 @@ static void internal_close(TLS_IO_INSTANCE* tls_io_instance)
     {
         free(tls_io_instance->hostname);
         tls_io_instance->hostname = NULL;
+    }
+    if (tls_io_instance->dns != NULL)
+    {
+        dns_async_destroy(tls_io_instance->dns);
+        tls_io_instance->dns = NULL;
     }
     if (tls_io_instance->ssl != NULL)
     {
@@ -299,6 +305,7 @@ CONCRETE_IO_HANDLE tlsio_openssl_create(void* io_create_parameters)
                     result->tlsio_state = TLSIO_STATE_NOT_OPEN;
                     result->sock = SOCKET_ASYNC_INVALID_SOCKET;
                     result->hostname = NULL;
+                    result->dns = NULL;
                     result->pending_io_list = NULL;
                     result->operation_timeout_end_time = 0;
                     result->hostname = (char*)malloc(strlen(tls_io_config->hostname) + 1);
@@ -381,21 +388,31 @@ int tlsio_openssl_open(CONCRETE_IO_HANDLE tls_io,
                     }
                     else
                     {
-                        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_034: [ The tlsio_openssl_compact_open shall store the provided on_bytes_received, on_bytes_received_context, on_io_error, on_io_error_context, on_io_open_complete, and on_io_open_complete_context parameters for later use as specified and tested per other line entries in this document. ]*/
-                        tls_io_instance->on_bytes_received = on_bytes_received;
-                        tls_io_instance->on_bytes_received_context = on_bytes_received_context;
+                        tls_io_instance->dns = dns_async_create(tls_io_instance->hostname, NULL);
+                        if (tls_io_instance->dns == NULL)
+                        {
+                            /* Codes_RS_TLSIO_OPENSSL_COMPACT_30_038: [ If the tlsio_openssl_compact_open fails to begin opening the OpenSSL connection it shall return FAILURE. ]*/
+                            // Error already logged
+                            result = __FAILURE__;
+                        }
+                        else
+                        {
+                            /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_034: [ The tlsio_openssl_compact_open shall store the provided on_bytes_received, on_bytes_received_context, on_io_error, on_io_error_context, on_io_open_complete, and on_io_open_complete_context parameters for later use as specified and tested per other line entries in this document. ]*/
+                            tls_io_instance->on_bytes_received = on_bytes_received;
+                            tls_io_instance->on_bytes_received_context = on_bytes_received_context;
 
-                        tls_io_instance->on_io_error = on_io_error;
-                        tls_io_instance->on_io_error_context = on_io_error_context;
+                            tls_io_instance->on_io_error = on_io_error;
+                            tls_io_instance->on_io_error_context = on_io_error_context;
 
-                        tls_io_instance->on_open_complete = on_io_open_complete;
-                        tls_io_instance->on_open_complete_context = on_io_open_complete_context;
+                            tls_io_instance->on_open_complete = on_io_open_complete;
+                            tls_io_instance->on_open_complete_context = on_io_open_complete_context;
 
-                        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_035: [ The tlsio_openssl_compact_open shall begin the process of opening the ssl connection with the host provided in the tlsio_openssl_compact_create call. ]*/
-                        // All the real work happens in dowork
-                        tls_io_instance->tlsio_state = TLSIO_STATE_OPENING_WAITING_DNS;
-                        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_036: [ If tlsio_openssl_compact_open successfully begins opening the OpenSSL connection, it shall return 0. ]*/
-                        result = 0;
+                            /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_035: [ The tlsio_openssl_compact_open shall begin the process of opening the ssl connection with the host provided in the tlsio_openssl_compact_create call. ]*/
+                            // All the real work happens in dowork
+                            tls_io_instance->tlsio_state = TLSIO_STATE_OPENING_WAITING_DNS;
+                            /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_036: [ If tlsio_openssl_compact_open successfully begins opening the OpenSSL connection, it shall return 0. ]*/
+                            result = 0;
+                        }
                     }
                 }
             }
@@ -404,7 +421,7 @@ int tlsio_openssl_open(CONCRETE_IO_HANDLE tls_io,
 
     if (result != 0 && on_io_open_complete != NULL)
     {
-        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_038: [ If the tlsio_openssl_compact_open returns FAILURE it shall call on_io_open_complete with the provided on_io_open_complete_context and IO_OPEN_ERROR. ]*/
+        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_039: [ If the tlsio_openssl_compact_open returns FAILURE it shall call on_io_open_complete with the provided on_io_open_complete_context and IO_OPEN_ERROR. ]*/
         on_io_open_complete(on_io_open_complete_context, IO_OPEN_ERROR);
     }
 
@@ -691,6 +708,8 @@ static void dowork_poll_dns(TLS_IO_INSTANCE* tls_io_instance)
         /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30XX_014: [ The tlsio_openssl_compact_create shall convert the provided hostName to an IPv4 address. ]*/
         /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30XX_021: [ The tlsio_openssl_compact_open shall begin the process of opening the ssl connection with the host provided in the tlsio_openssl_compact_create call. ]*/
         tls_io_instance->host_ipV4_address = dns_async_get_ipv4(tls_io_instance->dns);
+        dns_async_destroy(tls_io_instance->dns);
+        tls_io_instance->dns = NULL;
         if (tls_io_instance->host_ipV4_address == 0)
         {
             // Transition to TSLIO_STATE_ERROR

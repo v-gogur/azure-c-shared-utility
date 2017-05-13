@@ -182,7 +182,7 @@ uint32_t dns_async_get_ipv4(DNS_ASYNC_HANDLE dns_in)
         {
             if (dns->is_failed)
             {
-                /* Codes_SRS_DNS_ASYNC_30_032: [ If dns_async_is_create_complete has returned true and the lookup process has failed, dns_async_get_ipv4 shall return 0. ]*/
+                /* Codes_SRS_DNS_ASYNC_30_033: [ If dns_async_is_create_complete has returned true and the lookup process has failed, dns_async_get_ipv4 shall return 0. ]*/
                 result = 0;
             }
             else
