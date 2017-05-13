@@ -166,7 +166,9 @@ int tlsio_openssl_compact_open(
 
 **SRS_TLSIO_OPENSSL_COMPACT_30_037: [** If `tlsio_openssl_compact_open` has already been called, it shall log an error, and return _FAILURE_. **]**
 
-**SRS_TLSIO_OPENSSL_COMPACT_30_038: [** If the `tlsio_openssl_compact_open` returns _FAILURE_  it shall call `on_io_open_complete` with the provided `on_io_open_complete_context` and IO_OPEN_ERROR. **]**
+**SRS_TLSIO_OPENSSL_COMPACT_30_038: [** If the `tlsio_openssl_compact_open` fails to begin opening the OpenSSL connection it shall return _FAILURE_. **]**
+
+**SRS_TLSIO_OPENSSL_COMPACT_30_039: [** If the `tlsio_openssl_compact_open` returns _FAILURE_  it shall call `on_io_open_complete` with the provided `on_io_open_complete_context` and IO_OPEN_ERROR. **]**
 
 
 ###   tlsio_openssl_compact_close
