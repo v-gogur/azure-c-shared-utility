@@ -9,12 +9,6 @@
 #include <stdbool.h>
 #endif
 
-#ifdef WIN32
-// The timeout unit tests take 20 seconds each, so they're only run manually in Windows
-//#define UNIT_TEST_RUN_TIMEOUT_TESTS
-#endif
-#define SSL_MAX_BLOCK_TIME_SECONDS 20
-
 /**
  * The gballoc.h will replace the malloc, free, and realloc by the my_gballoc functions, in this case,
  *    if you define these mock functions after include the gballoc.h, you will create an infinity recursion,
@@ -46,6 +40,28 @@ static void my_gballoc_free(void* ptr)
 #include <time.h>
 #endif
 
+
+ /**
+ * Include the mockable headers here.
+ * These are the headers that contains the functions that you will replace to execute the test.
+ *
+ * For instance, if you will test a target_create() function in the target.c that calls a callee_open() function
+ *   in the callee.c, you must define callee_open() as a mockable function in the callee.h.
+ *
+ * Observe that we will replace the functions in callee.h here, so we don't care about its real implementation,
+ *   in fact, on this example, we even have the callee.c.
+ *
+ * Include all header files that you will replace the mockable functions in the ENABLE_MOCKS session below.
+ *
+ */
+#define ENABLE_MOCKS
+#include "azure_c_shared_utility/agenttime.h"
+#include "azure_c_shared_utility/gballoc.h"
+#include "azure_c_shared_utility/dns_async.h"
+#include "azure_c_shared_utility/socket_async.h"
+#include "openssl/ssl.h"
+#undef ENABLE_MOCKS
+
 /**
  * Include the test tools.
  */
@@ -56,29 +72,8 @@ static void my_gballoc_free(void* ptr)
 #include "umocktypes_stdint.h"
 #include "umock_c_negative_tests.h"
 #include "azure_c_shared_utility/macro_utils.h"
-#include "azure_c_shared_utility/threadapi.h"
 #include "azure_c_shared_utility/tlsio.h"
 #include "azure_c_shared_utility/xio.h"
-
-/**
- * Include the mockable headers here.
- * These are the headers that contains the functions that you will replace to execute the test.
- *
- * For instance, if you will test a target_create() function in the target.c that calls a callee_open() function 
- *   in the callee.c, you must define callee_open() as a mockable function in the callee.h.
- *
- * Observe that we will replace the functions in callee.h here, so we don't care about its real implementation,
- *   in fact, on this example, we even have the callee.c.
- *
- * Include all header files that you will replace the mockable functions in the ENABLE_MOCKS session below.
- *
- */
-#define ENABLE_MOCKS
-#include "azure_c_shared_utility/gballoc.h"
-#include "azure_c_shared_utility/dns.h"
-#include "azure_c_shared_utility/socket_async.h"
-#include "openssl/ssl.h"
-#undef ENABLE_MOCKS
 
 // These "headers" are actuall source files that are broken out of this file for readability
 #include "callbacks.h"
@@ -150,8 +145,14 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
         REGISTER_UMOCK_ALIAS_TYPE(SSL_CTX, void*);
         REGISTER_UMOCK_ALIAS_TYPE(SOCKET_ASYNC_OPTIONS_HANDLE, void*);
         REGISTER_UMOCK_ALIAS_TYPE(SOCKET_ASYNC_HANDLE, int);
+        REGISTER_UMOCK_ALIAS_TYPE(DNS_ASYNC_HANDLE, void*);
 
-        REGISTER_GLOBAL_MOCK_RETURNS(DNS_Get_IPv4, SSL_Get_IPv4_OK, SSL_Get_IPv4_FAIL);
+        REGISTER_GLOBAL_MOCK_RETURNS(get_time, TIMEOUT_START_TIME, TIMEOUT_END_TIME_TIMEOUT);
+
+        REGISTER_GLOBAL_MOCK_RETURNS(dns_async_create, GOOD_DNS_ASYNC_HANDLE, NULL);
+        REGISTER_GLOBAL_MOCK_RETURNS(dns_async_is_lookup_complete, 0, 1);
+        REGISTER_GLOBAL_MOCK_RETURNS(dns_async_get_ipv4, SSL_Get_IPv4_OK, SSL_Get_IPv4_FAIL);
+
         REGISTER_GLOBAL_MOCK_RETURNS(socket_async_create, SSL_Good_Socket, -1);
 
         REGISTER_GLOBAL_MOCK_RETURNS(SSL_new, SSL_Good_Ptr, NULL);
@@ -211,12 +212,69 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
         TEST_MUTEX_RELEASE(g_testByTest);
     }
 
+    TEST_FUNCTION(tlsio_openssl_compact__dowork_connection__succeeds)
+    {
+        ///arrange
+        reset_callback_context_records();
+        const IO_INTERFACE_DESCRIPTION* tlsio_id = tlsio_get_interface_description();
+        CONCRETE_IO_HANDLE tlsio = tlsio_id->concrete_io_create(&good_config);
+        int open_result = tlsio_id->concrete_io_open(tlsio, on_io_open_complete, IO_OPEN_COMPLETE_CONTEXT, on_bytes_received,
+            IO_BYTES_RECEIVED_CONTEXT, on_io_error, IO_ERROR_CONTEXT);
+        ASSERT_ARE_EQUAL(int, open_result, 0);
+        ASSERT_IO_OPEN_CALLBACK(false, IO_OPEN_ERROR);
+        umock_c_reset_all_calls();
+
+        ///act
+        tlsio_id->concrete_io_dowork(tlsio);
+
+        ///cleanup
+        tlsio_id->concrete_io_destroy(tlsio);
+    }
+
+    TEST_FUNCTION(tlsio_openssl_compact__dowork_pre_open__succeeds)
+    {
+        ///arrange
+        const IO_INTERFACE_DESCRIPTION* tlsio_id = tlsio_get_interface_description();
+        CONCRETE_IO_HANDLE tlsio = tlsio_id->concrete_io_create(&good_config);
+        umock_c_reset_all_calls();
+        reset_callback_context_records();
+
+        ///act
+        tlsio_id->concrete_io_dowork(tlsio);
+
+        ///assert
+        /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_075: [ If tlsio_openssl_compact_dowork is called before tlsio_openssl_compact_open, tlsio_openssl_compact_dowork shall do nothing. ]*/
+        ASSERT_NO_CALLBACKS();
+        ASSERT_ARE_EQUAL(char_ptr, umock_c_get_expected_calls(), umock_c_get_actual_calls());
+
+        ///cleanup
+        tlsio_id->concrete_io_destroy(tlsio);
+    }
+
+    TEST_FUNCTION(tlsio_openssl_compact__dowork_parameter_validation__fails)
+    {
+        ///arrange
+        const IO_INTERFACE_DESCRIPTION* tlsio_id = tlsio_get_interface_description();
+
+        ///act
+        /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_070: [ If the tlsio_handle parameter is NULL, tlsio_openssl_compact_dowork shall do nothing except log an error. ]*/
+        tlsio_id->concrete_io_dowork(NULL);
+
+        ///assert
+        ASSERT_NO_CALLBACKS();
+
+        ///cleanup
+    }
+
     TEST_FUNCTION(tlsio_openssl_compact__open__succeeds)
     {
         ///arrange
         const IO_INTERFACE_DESCRIPTION* tlsio_id = tlsio_get_interface_description();
         CONCRETE_IO_HANDLE tlsio = tlsio_id->concrete_io_create(&good_config);
+        umock_c_reset_all_calls();
         reset_callback_context_records();
+
+        STRICT_EXPECTED_CALL(get_time(NULL)); 
 
         ///act
         int open_result = tlsio_id->concrete_io_open(tlsio, on_io_open_complete, IO_OPEN_COMPLETE_CONTEXT, on_bytes_received,
@@ -227,6 +285,7 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
         ASSERT_ARE_EQUAL(int, open_result, 0);
         // Should not have made any callbacks yet
         ASSERT_IO_OPEN_CALLBACK(false, IO_OPEN_ERROR);
+        ASSERT_ARE_EQUAL(char_ptr, umock_c_get_expected_calls(), umock_c_get_actual_calls());
 
         ///cleanup
         tlsio_id->concrete_io_destroy(tlsio);

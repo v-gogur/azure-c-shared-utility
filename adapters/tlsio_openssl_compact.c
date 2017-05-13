@@ -11,9 +11,8 @@
 #include "azure_c_shared_utility/gballoc.h"
 #include "azure_c_shared_utility/tlsio.h"
 #include "azure_c_shared_utility/xlogging.h"
-#include "azure_c_shared_utility/threadapi.h"
 #include "azure_c_shared_utility/agenttime.h"
-#include "azure_c_shared_utility/dns.h"
+#include "azure_c_shared_utility/dns_async.h"
 #include "azure_c_shared_utility/socket_async.h"
 #include "azure_c_shared_utility/singlylinkedlist.h"
 
@@ -51,7 +50,6 @@ typedef struct PENDING_SOCKET_IO_TAG
 typedef enum TLSIO_STATE_TAG
 {
     TLSIO_STATE_NOT_OPEN,
-    TLSIO_STATE_OPENING_BEGIN,
     TLSIO_STATE_OPENING_WAITING_DNS,
     TLSIO_STATE_OPENING_WAITING_SOCKET,
     TLSIO_STATE_OPENING_WAITING_SSL,
@@ -74,7 +72,7 @@ typedef struct TLS_IO_INSTANCE_TAG
     SSL_CTX* ssl_context;
     TLSIO_STATE tlsio_state;
     uint32_t host_ipV4_address;
-    char* hostname;
+    DNS_ASYNC_HANDLE dns;
     uint16_t port;
     time_t operation_timeout_end_time;
     char* certificate;
@@ -157,10 +155,10 @@ static void internal_close(TLS_IO_INSTANCE* tls_io_instance)
         (void)SSL_shutdown(tls_io_instance->ssl);
     }
 
-    if (tls_io_instance->hostname != NULL)
+    if (tls_io_instance->dns != NULL)
     {
-        free(tls_io_instance->hostname);
-        tls_io_instance->hostname = NULL;
+        dns_async_destroy(tls_io_instance->dns);
+        tls_io_instance->dns = NULL;
     }
     if (tls_io_instance->ssl != NULL)
     {
@@ -300,21 +298,21 @@ CONCRETE_IO_HANDLE tlsio_openssl_create(void* io_create_parameters)
                     result->port = (uint16_t)tls_io_config->port;
                     result->tlsio_state = TLSIO_STATE_NOT_OPEN;
                     result->sock = SOCKET_ASYNC_INVALID_SOCKET;
-                    result->hostname = NULL;
+                    result->dns = NULL;
                     result->pending_io_list = NULL;
                     result->operation_timeout_end_time = 0;
-                    result->hostname = (char*)malloc(strlen(tls_io_config->hostname) + 1);
-                    if (result->hostname == NULL)
+                    /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_016: [ tlsio_openssl_compact_create shall make a copy of the hostname member of io_create_parameters to allow deletion of hostname immediately after the call. ]*/
+                    // dns_async_create copies the hostname
+                    result->dns = dns_async_create(tls_io_config->hostname, NULL);
+                    if (result->dns == NULL)
                     {
                         /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_011: [ If any resource allocation fails, tlsio_openssl_compact_create shall return NULL. ]*/
-                        LogError(allocate_fail_message);
+                        LogError("Failed dns_async_create");
                         tlsio_openssl_destroy(result);
                         result = NULL;
                     }
                     else
                     {
-                        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_016: [ tlsio_openssl_compact_create shall make a copy of the hostname member of io_create_parameters to allow deletion of hostname immediately after the call. ]*/
-                        (void)strcpy(result->hostname, tls_io_config->hostname);
                         // Create the message queue
                         result->pending_io_list = singlylinkedlist_create();
                         if (result->pending_io_list == NULL)
@@ -395,7 +393,7 @@ int tlsio_openssl_open(CONCRETE_IO_HANDLE tls_io,
 
                         /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_035: [ The tlsio_openssl_compact_open shall begin the process of opening the ssl connection with the host provided in the tlsio_openssl_compact_create call. ]*/
                         // All the real work happens in dowork
-                        tls_io_instance->tlsio_state = TLSIO_STATE_OPENING_BEGIN;
+                        tls_io_instance->tlsio_state = TLSIO_STATE_OPENING_WAITING_DNS;
                         /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_036: [ If tlsio_openssl_compact_open successfully begins opening the OpenSSL connection, it shall return 0. ]*/
                         result = 0;
                     }
@@ -684,31 +682,28 @@ static void dowork_send(TLS_IO_INSTANCE* tls_io_instance)
     }
 }
 
-static void dowork_begin_dns(TLS_IO_INSTANCE* tls_io_instance)
-{
-    // Asynchronous DNS is not yet implemented, so this function does nothing interesting
-    tls_io_instance->tlsio_state = TLSIO_STATE_OPENING_WAITING_DNS;
-}
-
 static void dowork_poll_dns(TLS_IO_INSTANCE* tls_io_instance)
 {
     // DNS_Get_IPv4 is a blocking call, and will get replaced with the 'poll'
     // part of an asynchronous version when available.
+    bool dns_is_complete;
+
+    int dns_result = dns_async_is_lookup_complete(tls_io_instance->dns, &dns_is_complete);
 
     // TODO: remember to add check_for_open_timeout(tls_io_instance) when making async conversion
 
     /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30XX_014: [ The tlsio_openssl_compact_create shall convert the provided hostName to an IPv4 address. ]*/
     /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30XX_021: [ The tlsio_openssl_compact_open shall begin the process of opening the ssl connection with the host provided in the tlsio_openssl_compact_create call. ]*/
-    tls_io_instance->host_ipV4_address = DNS_Get_IPv4(tls_io_instance->hostname);
-    if (tls_io_instance->host_ipV4_address == 0)
+    if (dns_result != 0)
     {
         // Transition to TSLIO_STATE_ERROR
         /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30XX_015:  [ If the IP for the hostName cannot be found, tlsio_openssl_compact_dowork shall call on_io_open_complete with IO_OPEN_ERROR. ]*/
-        LogInfo("Could not get IPv4 for %s", tls_io_instance->hostname);
+        // The DNS failure has already been logged
         enter_open_error_state(tls_io_instance);
     }
-    else
+    else if (dns_is_complete)
     {
+        tls_io_instance->host_ipV4_address = dns_async_get_ipv4(tls_io_instance->dns);
         SOCKET_ASYNC_HANDLE sock = socket_async_create(tls_io_instance->host_ipV4_address, tls_io_instance->port, false, NULL);
         if (sock < 0)
         {
@@ -807,13 +802,12 @@ static void dowork_poll_open_ssl(TLS_IO_INSTANCE* tls_io_instance)
     }
 }
 
-/* Codes_SRS_TLSIO_OPENSSL_COMPACT_30XX_004: [ The tlsio_openssl_compact shall call the callbacks functions defined in the xio.h ]*/
 void tlsio_openssl_dowork(CONCRETE_IO_HANDLE tls_io)
 {
     TLS_IO_INSTANCE* tls_io_instance = (TLS_IO_INSTANCE*)tls_io;
     if (tls_io_instance == NULL)
     {
-        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30XX_048: [ If the tlsio_handle parameter is NULL, tlsio_openssl_compact_dowork shall do nothing except log an error and return FAILURE. ]*/
+        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_070: [ If the tlsio_handle parameter is NULL, tlsio_openssl_compact_dowork shall do nothing except log an error. ]*/
         LogError(null_tlsio_message);
     }
     else
@@ -822,11 +816,8 @@ void tlsio_openssl_dowork(CONCRETE_IO_HANDLE tls_io)
         switch (tls_io_instance->tlsio_state)
         {
         case TLSIO_STATE_NOT_OPEN:
+            /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_075: [ If tlsio_openssl_compact_dowork is called before tlsio_openssl_compact_open, tlsio_openssl_compact_dowork shall do nothing. ]*/
             // Waiting to be opened, nothing to do
-            break;
-        case TLSIO_STATE_OPENING_BEGIN:
-            LogInfo("dowork_begin_dns");
-            dowork_begin_dns(tls_io_instance);
             break;
         case TLSIO_STATE_OPENING_WAITING_DNS:
             LogInfo("dowork_poll_dns");

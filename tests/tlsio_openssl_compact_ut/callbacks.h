@@ -178,3 +178,12 @@ static void ASSERT_BYTES_RECEIVED_CALLBACK(bool called)
         ASSERT_ARE_EQUAL_WITH_MSG(int, 0, on_bytes_received_call_count, "unexpected bytes_received_callback");
     }
 }
+
+static void ASSERT_NO_CALLBACKS()
+{
+    ASSERT_IO_ERROR_CALLBACK(false);
+    ASSERT_IO_OPEN_CALLBACK(false, IO_OPEN_ERROR);
+    ASSERT_IO_SEND_CALLBACK(false, IO_SEND_ERROR);
+    ASSERT_IO_CLOSE_CALLBACK(false);
+    ASSERT_BYTES_RECEIVED_CALLBACK(false);
+}
