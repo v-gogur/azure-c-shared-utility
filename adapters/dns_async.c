@@ -15,8 +15,8 @@
 
 // EXTRACT_IPV4 pulls the uint32_t IPv4 address out of an addrinfo struct
 // This will not be needed for the asynchronous design
-#ifdef WIN32_NOT_REALLY_USED	
-#define EXTRACT_IPV4(ptr) ((struct sockaddr_in *) ptr->ai_addr)->sin_addr.S_un.S_addr
+#ifdef WIN32_NOT_USED
+//#define EXTRACT_IPV4(ptr) ((struct sockaddr_in *) ptr->ai_addr)->sin_addr.S_un.S_addr
 #else
 // The default definition handles lwIP. Please add comments for other systems tested.
 #define EXTRACT_IPV4(ptr) ((struct sockaddr_in *) ptr->ai_addr)->sin_addr.s_addr
@@ -73,6 +73,7 @@ DNS_ASYNC_HANDLE dns_async_create(const char* hostname, DNS_ASYNC_OPTIONS* optio
     return result;
 }
 
+/* Codes_SRS_DNS_ASYNC_30_021: [ dns_async_is_create_complete shall perform the asynchronous work of DNS lookup and log any errors. ]*/
 bool dns_async_is_lookup_complete(DNS_ASYNC_HANDLE dns_in)
 {
     DNS_ASYNC_INSTANCE* dns = (DNS_ASYNC_INSTANCE*)dns_in;
@@ -145,7 +146,6 @@ bool dns_async_is_lookup_complete(DNS_ASYNC_HANDLE dns_in)
             result = true;
         }
     }
-
 
     return result;
 }
