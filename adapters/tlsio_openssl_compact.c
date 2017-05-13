@@ -684,41 +684,42 @@ static void dowork_send(TLS_IO_INSTANCE* tls_io_instance)
 
 static void dowork_poll_dns(TLS_IO_INSTANCE* tls_io_instance)
 {
-    // DNS_Get_IPv4 is a blocking call, and will get replaced with the 'poll'
-    // part of an asynchronous version when available.
-    bool dns_is_complete;
+    bool dns_is_complete = dns_async_is_lookup_complete(tls_io_instance->dns);
 
-    int dns_result = dns_async_is_lookup_complete(tls_io_instance->dns, &dns_is_complete);
-
-    // TODO: remember to add check_for_open_timeout(tls_io_instance) when making async conversion
-
-    /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30XX_014: [ The tlsio_openssl_compact_create shall convert the provided hostName to an IPv4 address. ]*/
-    /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30XX_021: [ The tlsio_openssl_compact_open shall begin the process of opening the ssl connection with the host provided in the tlsio_openssl_compact_create call. ]*/
-    if (dns_result != 0)
+    if (dns_is_complete)
     {
-        // Transition to TSLIO_STATE_ERROR
-        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30XX_015:  [ If the IP for the hostName cannot be found, tlsio_openssl_compact_dowork shall call on_io_open_complete with IO_OPEN_ERROR. ]*/
-        // The DNS failure has already been logged
-        enter_open_error_state(tls_io_instance);
-    }
-    else if (dns_is_complete)
-    {
+        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30XX_014: [ The tlsio_openssl_compact_create shall convert the provided hostName to an IPv4 address. ]*/
+        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30XX_021: [ The tlsio_openssl_compact_open shall begin the process of opening the ssl connection with the host provided in the tlsio_openssl_compact_create call. ]*/
         tls_io_instance->host_ipV4_address = dns_async_get_ipv4(tls_io_instance->dns);
-        SOCKET_ASYNC_HANDLE sock = socket_async_create(tls_io_instance->host_ipV4_address, tls_io_instance->port, false, NULL);
-        if (sock < 0)
+        if (tls_io_instance->host_ipV4_address == 0)
         {
-            // This is a communication interruption rather than a program bug
-            /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30XX_030: [ If tlsio_openssl_compact_dowork fails to open the ssl connection it shall call on_io_open_complete with IO_OPEN_ERROR. ]*/
-            LogInfo("Could not open the socket");
+            // Transition to TSLIO_STATE_ERROR
+            /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30XX_015:  [ If the IP for the hostName cannot be found, tlsio_openssl_compact_dowork shall call on_io_open_complete with IO_OPEN_ERROR. ]*/
+            // The DNS failure has already been logged
             enter_open_error_state(tls_io_instance);
         }
         else
         {
-            // The socket has been created successfully, so now wait for it to
-            // finish the TCP handshake.
-            tls_io_instance->sock = sock;
-            tls_io_instance->tlsio_state = TLSIO_STATE_OPENING_WAITING_SOCKET;
+            SOCKET_ASYNC_HANDLE sock = socket_async_create(tls_io_instance->host_ipV4_address, tls_io_instance->port, false, NULL);
+            if (sock < 0)
+            {
+                // This is a communication interruption rather than a program bug
+                /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30XX_030: [ If tlsio_openssl_compact_dowork fails to open the ssl connection it shall call on_io_open_complete with IO_OPEN_ERROR. ]*/
+                LogInfo("Could not open the socket");
+                enter_open_error_state(tls_io_instance);
+            }
+            else
+            {
+                // The socket has been created successfully, so now wait for it to
+                // finish the TCP handshake.
+                tls_io_instance->sock = sock;
+                tls_io_instance->tlsio_state = TLSIO_STATE_OPENING_WAITING_SOCKET;
+            }
         }
+    }
+    else
+    {
+        check_for_open_timeout(tls_io_instance);
     }
 }
 

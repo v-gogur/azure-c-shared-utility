@@ -3,9 +3,9 @@ dns_async
 
 ## Overview
 
-**dns_async** performs an asynchronous lookup of a TCP IPv4 address given a host name. This module is intended to locate IP addresses for an Azure server, and more flexible behavior is deliberately out-of-scope at this time.
+**dns_async** performs an asynchronous lookup of a TCP IPv4 address given a host name.
 
-IPv6 address lookup is currently out-of-scope, although support for it may be added in the future via addition of a `dns_async_get_ipv6` call.
+This module is intended to locate IP addresses for an Azure server, and more flexible behavior is deliberately out-of-scope at this time. IPv6 address lookup is currently out-of-scope, although support for it may be added in the future via addition of a `dns_async_get_ipv6` call.
 
 The present implementation will not actually provide asynchronous behavior, which is a feature to be added in the future.
 ## References
@@ -35,7 +35,7 @@ void dns_async_destroy(DNS_ASYNC_HANDLE dns);
 
 
 ###   dns_async_create
-`dns_async_create` begins the process of asynchronous DNS lookup.
+`dns_async_create` begins a single attempt at asynchronous DNS lookup.
 ```c
 DNS_ASYNC_HANDLE dns_async_create(const char* hostname, DNS_ASYNC_OPTIONS* options);
 ```
@@ -52,37 +52,37 @@ DNS_ASYNC_HANDLE dns_async_create(const char* hostname, DNS_ASYNC_OPTIONS* optio
 
 
 ###   dns_async_is_lookup_complete
-`dns_async_is_lookup_complete` tests whether the DNS lookup has been completed. This method must be called repeatedly to complete the lookup process.
-
-If this method fails then `dns_async_destroy` must be called.
+`dns_async_is_lookup_complete` tests whether `dns_async_create`'s single attempt at DNS lookup has been completed. To complete the lookup process, this method must be called repeatedly until it returns `true`.
 
 ```c
-int dns_async_is_create_complete(DNS_ASYNC_HANDLE dns, bool* is_complete);
+bool dns_async_is_create_complete(DNS_ASYNC_HANDLE dns);
 ```
 
-**SRS_DNS_ASYNC_30_020: [** If the `dns` parameter is NULL, `dns_async_is_create_complete` shall log an error and return _FAILURE_. **]**
+**SRS_DNS_ASYNC_30_020: [** If the `dns` parameter is NULL, `dns_async_is_create_complete` shall log an error and return `false`. **]**
 
-**SRS_DNS_ASYNC_30_021: [** If the `is_complete` parameter is NULL, `dns_async_is_create_complete` shall log an error and return _FAILURE_. **]**
+**SRS_DNS_ASYNC_30_021: [** `dns_async_is_create_complete` shall perform the asynchronous work of DNS lookup and log any errors. **]**
 
-**SRS_DNS_ASYNC_30_022: [** On success, the `is_complete` value shall be set to the completion state and `dns_async_is_create_complete` shall return 0. **]**
+**SRS_DNS_ASYNC_30_022: [** If the DNS lookup process has completed, `dns_async_is_create_complete` shall return `true`. **]**
 
-**SRS_DNS_ASYNC_30_023: [** On any failure, the `is_complete` value shall be set to `false` and `dns_async_is_create_complete` shall return _FAILURE_. **]**
+**SRS_DNS_ASYNC_30_023: [** If the DNS lookup process is not yet complete, `dns_async_is_create_complete` shall return `false`. **]**
+
+**SRS_DNS_ASYNC_30_024: [** If `dns_async_is_create_complete` has previously returned `true`, `dns_async_is_create_complete` shall do nothing and return `true`. **]**
 
 
 ###   dns_async_get_ipv4
-`dns_async_get_ipv4` retrieves the IP address.
-
-This method may not be called until `dns_async_is_create_complete` indicates completion.
+`dns_async_get_ipv4` retrieves the IP address address after `dns_async_is_create_complete` indicates completion. A return value of 0 indicates failure.
 
 ```c
 uint32_t dns_async_get_ipv4(DNS_ASYNC_HANDLE dns);
 ```
 
-**SRS_DNS_ASYNC_30_030: [** If the `dns` parameter is NULL, `dns_async_get_ipv4` shall log an error and return _FAILURE_. **]**
+**SRS_DNS_ASYNC_30_030: [** If the `dns` parameter is NULL, `dns_async_get_ipv4` shall log an error and return 0. **]**
 
-**SRS_DNS_ASYNC_30_031: [** If `dns_async_is_create_complete` has not returned a `true` for `is_complete`, `dns_async_get_ipv4` shall log an error and return 0. **]**
+**SRS_DNS_ASYNC_30_031: [** If `dns_async_is_create_complete` has not yet returned `true`, `dns_async_get_ipv4` shall log an error and return 0. **]**
 
-**SRS_DNS_ASYNC_30_032: [** If `dns_async_is_create_complete` has returned a `true` for `is_complete`, `dns_async_get_ipv4` shall return the discovered IPv4 address. **]**
+**SRS_DNS_ASYNC_30_032: [** If `dns_async_is_create_complete` has returned `true` and the lookup process has succeeded, `dns_async_get_ipv4` shall return the discovered IPv4 address. **]**
+
+**SRS_DNS_ASYNC_30_032: [** If `dns_async_is_create_complete` has returned `true` and the lookup process has failed, `dns_async_get_ipv4` shall return 0. **]**
 
 
 ###   dns_async_destroy

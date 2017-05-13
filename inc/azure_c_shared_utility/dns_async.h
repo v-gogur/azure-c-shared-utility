@@ -34,11 +34,9 @@ extern "C" {
     *
     * @param   dns	The DNS_ASYNC_HANDLE.
     *
-    * @param   is_complete	The process completion state.
-    *
-    * @return	@c A uint32_t IPv4 address. 0 indicates failure.
+    * @return	@c A bool to indicate completion.
     */
-    MOCKABLE_FUNCTION(, int, dns_async_is_lookup_complete, DNS_ASYNC_HANDLE, dns, bool*, is_complete);
+    MOCKABLE_FUNCTION(, bool, dns_async_is_lookup_complete, DNS_ASYNC_HANDLE, dns);
 
     /**
     * @brief	Return the IPv4 of a completed lookup process. Call only after dns_async_is_lookup_complete indicates completion.
