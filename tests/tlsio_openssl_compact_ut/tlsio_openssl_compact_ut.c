@@ -258,8 +258,6 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
         // dowork_poll_open_ssl (done)
         STRICT_EXPECTED_CALL(SSL_connect(SSL_Good_Ptr)).SetReturn(SSL_CONNECT_SUCCESS);
 
-        
-
         ///act
         tlsio_id->concrete_io_dowork(tlsio); // dowork_poll_dns (waiting)
         tlsio_id->concrete_io_dowork(tlsio); // dowork_poll_dns (done)
@@ -270,6 +268,7 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
         tlsio_id->concrete_io_dowork(tlsio); // dowork_poll_open_ssl (done)
 
         ///assert
+        // Check that we go the on_open callback
         ASSERT_IO_OPEN_CALLBACK(true, IO_OPEN_OK);
         ASSERT_ARE_EQUAL(char_ptr, umock_c_get_expected_calls(), umock_c_get_actual_calls());
 
