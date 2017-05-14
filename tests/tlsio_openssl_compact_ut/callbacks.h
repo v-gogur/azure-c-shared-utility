@@ -28,7 +28,7 @@ void ThreadAPI_Sleep(unsigned int milliseconds)
 
 
 // Keep track of whether callbacks were performed as expected
-static bool on_io_open_complete_call_count;
+static int on_io_open_complete_call_count;
 static bool on_io_open_complete_context_ok;
 static IO_OPEN_RESULT on_io_open_complete_result;
 

@@ -5,6 +5,8 @@
 // is broken out for readability. 
 
 // 
+#define SSL_ERROR -1
+#define SSL_CONNECT_SUCCESS 0
 #define SSL_ERROR_HARD_FAIL 99
 #define SSL_Good_Ptr (void*)22
 #define SSL_Good_Context_Ptr (SSL_CTX*)33
@@ -275,6 +277,7 @@ int my_SSL_read(SSL* ssl, uint8_t* buffer, size_t size)
     return 2;
 }
 
+#if(0)
 // SSL_get_error is guaranteed to be called after every non-successful
 // call to my_SSL_connect.
 int SSL_get_error(SSL* ssl, int last_error)
@@ -291,3 +294,4 @@ int SSL_get_error(SSL* ssl, int last_error)
     current_ssl_get_error_sequence->extended_index++;
     return result;
 }
+#endif

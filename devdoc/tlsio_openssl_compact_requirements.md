@@ -5,6 +5,12 @@ tlsio_openssl_compact
 
 tlsio_openssl_compact implements a tlsio adapter for compact OpenSSL platforms.  
 
+### Retry Behavior
+The fact that the `xio` specification contains both a `close` method and a `destroy` method implies that retry sequences must succeed. In other words, it must work to `close` and the re-`open` an adapter after an error has occurred during either an IO error or an error during the `open` sequence.
+
+Here are some retry sequences defined for the use in requirements:
+* **Failed open retry** means a retry that occurs after `dowork` fails to establish its connection to the server.
+* **Failed i/o retry** means a retry that occurs after `dowork` has experienced a failure while sending or receiving messages through an established connection.
 
 ## References
 
@@ -139,6 +145,7 @@ void tlsio_openssl_compact_destroy(CONCRETE_IO_HANDLE tlsio_handle);
 
 ###   tlsio_openssl_compact_open
 Implementation of `IO_OPEN concrete_io_open`
+
 ```c
 int tlsio_openssl_compact_open(
     CONCRETE_IO_HANDLE tlsio_handle,
@@ -169,6 +176,10 @@ int tlsio_openssl_compact_open(
 **SRS_TLSIO_OPENSSL_COMPACT_30_038: [** If the `tlsio_openssl_compact_open` fails to begin opening the OpenSSL connection it shall return _FAILURE_. **]**
 
 **SRS_TLSIO_OPENSSL_COMPACT_30_039: [** If the `tlsio_openssl_compact_open` returns _FAILURE_  it shall call `on_io_open_complete` with the provided `on_io_open_complete_context` and IO_OPEN_ERROR. **]**
+
+**SRS_TLSIO_OPENSSL_COMPACT_30_040: [** `tlsio_openssl_compact_open` shall succeed during a 'Failed open retry' as defined at the top of this document. **]**
+
+**SRS_TLSIO_OPENSSL_COMPACT_30_041: [** `tlsio_openssl_compact_open` shall succeed during a 'Failed i/o retry' as defined at the top of this document. **]**
 
 
 ###   tlsio_openssl_compact_close

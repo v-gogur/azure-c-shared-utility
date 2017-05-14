@@ -857,7 +857,7 @@ void tlsio_openssl_dowork(CONCRETE_IO_HANDLE tls_io)
             dowork_send(tls_io_instance);
             break;
         case TLSIO_STATE_ERROR:
-            // There's nothing valid to do here but wait to be destroyed
+            // There's nothing valid to do here but wait to be retried
             break;
         default:
             LogError("Unrecoverable program bug: unexpected internal tlsio state");
