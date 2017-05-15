@@ -213,6 +213,124 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
         TEST_MUTEX_RELEASE(g_testByTest);
     }
 
+    /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_076: [ If tlsio_openssl_compact_dowork is called after tlsio_openssl_compact_close, tlsio_openssl_compact_dowork shall do nothing. ]*/
+    TEST_FUNCTION(tlsio_openssl_compact__dowork_post_close__succeeds)
+    {
+        ///arrange
+        // Create
+        reset_callback_context_records();
+        const IO_INTERFACE_DESCRIPTION* tlsio_id = tlsio_get_interface_description();
+        CONCRETE_IO_HANDLE tlsio = tlsio_id->concrete_io_create(&good_config);
+        int open_result = tlsio_id->concrete_io_open(tlsio, on_io_open_complete, IO_OPEN_COMPLETE_CONTEXT, on_bytes_received,
+            IO_BYTES_RECEIVED_CONTEXT, on_io_error, IO_ERROR_CONTEXT);
+        ASSERT_ARE_EQUAL(int, open_result, 0);
+        ASSERT_IO_OPEN_CALLBACK(false, IO_OPEN_ERROR);
+
+        // Pump dowork until it opens
+        STRICT_EXPECTED_CALL(socket_async_is_create_complete(SSL_Good_Socket, IGNORED_PTR_ARG)).CopyOutArgumentBuffer_is_complete(&bool_true, sizeof_bool);
+        tlsio_id->concrete_io_dowork(tlsio); // dowork_poll_dns (done)
+        tlsio_id->concrete_io_dowork(tlsio); // dowork_poll_socket (done)
+        tlsio_id->concrete_io_dowork(tlsio); // dowork_poll_open_ssl (done)
+        ASSERT_IO_OPEN_CALLBACK(true, IO_OPEN_OK);
+
+        // close it
+        tlsio_id->concrete_io_close(tlsio, on_io_close_complete, NULL);
+
+        reset_callback_context_records();
+        umock_c_reset_all_calls();
+
+        ///act
+        tlsio_id->concrete_io_dowork(tlsio); // dowork_poll_dns (done)
+
+        ///assert
+        // Check the dowork it did nothing
+        ASSERT_NO_CALLBACKS();
+        ASSERT_ARE_EQUAL(char_ptr, umock_c_get_expected_calls(), umock_c_get_actual_calls());
+
+        ///cleanup
+        tlsio_id->concrete_io_destroy(tlsio);
+    }
+
+
+    TEST_FUNCTION(tlsio_openssl_compact__dowork_unhappy_paths__fails)
+    {
+        ///arrange
+        int negativeTestsInitResult = umock_c_negative_tests_init();
+        ASSERT_ARE_EQUAL(int, 0, negativeTestsInitResult);
+
+
+
+
+        // dowork_poll_dns (waiting)
+        STRICT_EXPECTED_CALL(dns_async_is_lookup_complete(GOOD_DNS_ASYNC_HANDLE)).SetReturn(false);
+        STRICT_EXPECTED_CALL(get_time(NULL));
+
+        // dowork_poll_dns (done)
+        STRICT_EXPECTED_CALL(dns_async_is_lookup_complete(GOOD_DNS_ASYNC_HANDLE));
+        STRICT_EXPECTED_CALL(dns_async_get_ipv4(GOOD_DNS_ASYNC_HANDLE));
+        STRICT_EXPECTED_CALL(dns_async_destroy(GOOD_DNS_ASYNC_HANDLE));
+        STRICT_EXPECTED_CALL(socket_async_create(SSL_Get_IPv4_OK, SSL_good_port_number, false, NULL));
+
+        // dowork_poll_socket (waiting)
+        STRICT_EXPECTED_CALL(socket_async_is_create_complete(SSL_Good_Socket, IGNORED_PTR_ARG)).CopyOutArgumentBuffer_is_complete(&bool_false, sizeof_bool);
+        STRICT_EXPECTED_CALL(get_time(NULL));
+
+        // dowork_poll_socket (done)
+        STRICT_EXPECTED_CALL(socket_async_is_create_complete(SSL_Good_Socket, IGNORED_PTR_ARG)).CopyOutArgumentBuffer_is_complete(&bool_true, sizeof_bool);
+        STRICT_EXPECTED_CALL(SSL_CTX_new(IGNORED_NUM_ARG));
+        STRICT_EXPECTED_CALL(SSL_new(IGNORED_PTR_ARG));
+        STRICT_EXPECTED_CALL(SSL_set_fd(IGNORED_PTR_ARG, IGNORED_NUM_ARG));
+
+        // dowork_poll_open_ssl (waiting SSL_ERROR_WANT_READ)
+        STRICT_EXPECTED_CALL(SSL_connect(SSL_Good_Ptr)).SetReturn(SSL_ERROR);
+        STRICT_EXPECTED_CALL(SSL_get_error(SSL_Good_Ptr, SSL_ERROR)).SetReturn(SSL_ERROR_WANT_READ);
+        STRICT_EXPECTED_CALL(get_time(NULL));
+
+        // dowork_poll_open_ssl (waiting SSL_ERROR_WANT_WRITE)
+        STRICT_EXPECTED_CALL(SSL_connect(SSL_Good_Ptr)).SetReturn(SSL_ERROR);
+        STRICT_EXPECTED_CALL(SSL_get_error(SSL_Good_Ptr, SSL_ERROR)).SetReturn(SSL_ERROR_WANT_WRITE);
+        STRICT_EXPECTED_CALL(get_time(NULL));
+
+        // dowork_poll_open_ssl (done)
+        STRICT_EXPECTED_CALL(SSL_connect(SSL_Good_Ptr)).SetReturn(SSL_CONNECT_SUCCESS);
+
+        umock_c_negative_tests_snapshot();
+
+        for (unsigned int i = 0; i < umock_c_negative_tests_call_count(); i++)
+        {
+            reset_callback_context_records();
+            const IO_INTERFACE_DESCRIPTION* tlsio_id = tlsio_get_interface_description();
+            CONCRETE_IO_HANDLE tlsio = tlsio_id->concrete_io_create(&good_config);
+            int open_result = tlsio_id->concrete_io_open(tlsio, on_io_open_complete, IO_OPEN_COMPLETE_CONTEXT, on_bytes_received,
+                IO_BYTES_RECEIVED_CONTEXT, on_io_error, IO_ERROR_CONTEXT);
+            ASSERT_ARE_EQUAL(int, open_result, 0);
+            ASSERT_IO_OPEN_CALLBACK(false, IO_OPEN_ERROR);
+            umock_c_reset_all_calls();
+
+            umock_c_negative_tests_reset();
+            //umock_c_negative_tests_fail_call(i);
+
+            ///act
+            tlsio_id->concrete_io_dowork(tlsio); // dowork_poll_dns (waiting)
+            tlsio_id->concrete_io_dowork(tlsio); // dowork_poll_dns (done)
+            tlsio_id->concrete_io_dowork(tlsio); // dowork_poll_socket (waiting)
+            tlsio_id->concrete_io_dowork(tlsio); // dowork_poll_socket (done)
+            tlsio_id->concrete_io_dowork(tlsio); // dowork_poll_open_ssl (waiting SSL_ERROR_WANT_READ)
+            tlsio_id->concrete_io_dowork(tlsio); // dowork_poll_open_ssl (waiting SSL_ERROR_WANT_WRITE)
+            tlsio_id->concrete_io_dowork(tlsio); // dowork_poll_open_ssl (done)
+
+            ///assert
+            ASSERT_IO_OPEN_CALLBACK(true, IO_OPEN_OK);
+
+            ///cleanup
+            tlsio_id->concrete_io_close(tlsio, on_io_close_complete, NULL);
+            tlsio_id->concrete_io_destroy(tlsio);
+        }
+
+        ///cleanup
+        umock_c_negative_tests_deinit();
+    }
+
     TEST_FUNCTION(tlsio_openssl_compact__dowork_connection__succeeds)
     {
         ///arrange
@@ -266,6 +384,7 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
         tlsio_id->concrete_io_dowork(tlsio); // dowork_poll_open_ssl (waiting SSL_ERROR_WANT_READ)
         tlsio_id->concrete_io_dowork(tlsio); // dowork_poll_open_ssl (waiting SSL_ERROR_WANT_WRITE)
         tlsio_id->concrete_io_dowork(tlsio); // dowork_poll_open_ssl (done)
+        //
 
         ///assert
         // Check that we go the on_open callback
@@ -277,6 +396,7 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
         tlsio_id->concrete_io_destroy(tlsio);
     }
 
+    /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_075: [ If tlsio_openssl_compact_dowork is called before tlsio_openssl_compact_open, tlsio_openssl_compact_dowork shall do nothing. ]*/
     TEST_FUNCTION(tlsio_openssl_compact__dowork_pre_open__succeeds)
     {
         ///arrange
@@ -289,7 +409,6 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
         tlsio_id->concrete_io_dowork(tlsio);
 
         ///assert
-        /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_075: [ If tlsio_openssl_compact_dowork is called before tlsio_openssl_compact_open, tlsio_openssl_compact_dowork shall do nothing. ]*/
         ASSERT_NO_CALLBACKS();
         ASSERT_ARE_EQUAL(char_ptr, umock_c_get_expected_calls(), umock_c_get_actual_calls());
 
