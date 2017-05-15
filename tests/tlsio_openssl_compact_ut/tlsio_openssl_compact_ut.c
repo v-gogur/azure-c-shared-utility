@@ -243,7 +243,7 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
         tlsio_id->concrete_io_dowork(tlsio); // dowork_poll_dns (done)
 
         ///assert
-        // Check the dowork it did nothing
+        // Verify that the dowork it did nothing
         ASSERT_NO_CALLBACKS();
         ASSERT_ARE_EQUAL(char_ptr, umock_c_get_expected_calls(), umock_c_get_actual_calls());
 
@@ -252,7 +252,9 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
     }
 
 
-    TEST_FUNCTION(tlsio_openssl_compact__dowork_unhappy_paths__fails)
+    /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_082: [ If the connection process fails for any reason, tlsio_openssl_compact_dowork shall log an error and call on_io_open_complete with the on_io_open_complete_context parameter provided in tlsio_openssl_compact_open and IO_OPEN_ERROR. ]*/
+    /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_081: [ If the connection process takes longer than the internally defined TLSIO_OPERATION_TIMEOUT_SECONDS it shall log an error and call on_io_open_complete with the on_io_open_complete_context parameter provided in tlsio_openssl_compact_open and IO_OPEN_ERROR. ]*/
+    TEST_FUNCTION(tlsio_openssl_compact__dowork_open_unhappy_paths__fails)
     {
         ///arrange
         int negativeTestsInitResult = umock_c_negative_tests_init();
@@ -274,6 +276,7 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
 
         // dowork_poll_socket (waiting)
         fails[k++] = false; STRICT_EXPECTED_CALL(socket_async_is_create_complete(SSL_Good_Socket, IGNORED_PTR_ARG)).CopyOutArgumentBuffer_is_complete(&bool_false, sizeof_bool);
+        /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_081: [ If the connection process takes longer than the internally defined TLSIO_OPERATION_TIMEOUT_SECONDS it shall log an error and call on_io_open_complete with the on_io_open_complete_context parameter provided in tlsio_openssl_compact_open and IO_OPEN_ERROR. ]*/
         fails[k++] = true; STRICT_EXPECTED_CALL(get_time(NULL));
 
         // dowork_poll_socket (done)
@@ -285,6 +288,7 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
         // dowork_poll_open_ssl (timeout)
         fails[k++] = false; STRICT_EXPECTED_CALL(SSL_connect(SSL_Good_Ptr)).SetReturn(SSL_ERROR);
         fails[k++] = false; STRICT_EXPECTED_CALL(SSL_get_error(SSL_Good_Ptr, SSL_ERROR)).SetReturn(SSL_ERROR_WANT_READ);
+        /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_081: [ If the connection process takes longer than the internally defined TLSIO_OPERATION_TIMEOUT_SECONDS it shall log an error and call on_io_open_complete with the on_io_open_complete_context parameter provided in tlsio_openssl_compact_open and IO_OPEN_ERROR. ]*/
         fails[k++] = true; STRICT_EXPECTED_CALL(get_time(NULL));
 
         // dowork_poll_open_ssl (hard failure)
@@ -320,6 +324,9 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
             tlsio_id->concrete_io_dowork(tlsio); // dowork_poll_open_ssl (done)
 
             ///assert
+            /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_081: [ If the connection process takes longer than the internally defined TLSIO_OPERATION_TIMEOUT_SECONDS it shall log an error and call on_io_open_complete with the on_io_open_complete_context parameter provided in tlsio_openssl_compact_open and IO_OPEN_ERROR. ]*/
+            /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_082: [ If the connection process fails for any reason, tlsio_openssl_compact_dowork shall log an error and call on_io_open_complete with the on_io_open_complete_context parameter provided in tlsio_openssl_compact_open and IO_OPEN_ERROR. ]*/
+            // A few of the iterations have no failures
             ASSERT_IO_OPEN_CALLBACK(true, fails[i] ? IO_OPEN_ERROR : IO_OPEN_OK);
 
             ///cleanup
@@ -331,6 +338,8 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
         umock_c_negative_tests_deinit();
     }
 
+    /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_080: [ The tlsio_openssl_compact_dowork shall establish an OpenSSL connection using the hostName and port provided during tlsio_openssl_compact_open. ]*/
+    /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_083: [ If tlsio_openssl_compact_dowork successfully opens the ssl connection it shall call on_io_open_complete with the on_io_open_complete_context parameter provided in tlsio_openssl_compact_open and IO_OPEN_OK. ]*/
     TEST_FUNCTION(tlsio_openssl_compact__dowork_connection__succeeds)
     {
         ///arrange
@@ -349,8 +358,10 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
 
         // dowork_poll_dns (done)
         STRICT_EXPECTED_CALL(dns_async_is_lookup_complete(GOOD_DNS_ASYNC_HANDLE));
+        /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_083: [ If tlsio_openssl_compact_dowork successfully opens the ssl connection it shall call on_io_open_complete with the on_io_open_complete_context parameter provided in tlsio_openssl_compact_open and IO_OPEN_OK. ]*/
         STRICT_EXPECTED_CALL(dns_async_get_ipv4(GOOD_DNS_ASYNC_HANDLE));
         STRICT_EXPECTED_CALL(dns_async_destroy(GOOD_DNS_ASYNC_HANDLE));
+        /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_083: [ If tlsio_openssl_compact_dowork successfully opens the ssl connection it shall call on_io_open_complete with the on_io_open_complete_context parameter provided in tlsio_openssl_compact_open and IO_OPEN_OK. ]*/
         STRICT_EXPECTED_CALL(socket_async_create(SSL_Get_IPv4_OK, SSL_good_port_number, false, NULL));
 
         // dowork_poll_socket (waiting)
@@ -388,6 +399,8 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
 
         ///assert
         // Check that we go the on_open callback
+        /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_080: [ The tlsio_openssl_compact_dowork shall establish an OpenSSL connection using the hostName and port provided during tlsio_openssl_compact_open. ]*/
+        /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_083: [ If tlsio_openssl_compact_dowork successfully opens the ssl connection it shall call on_io_open_complete with the on_io_open_complete_context parameter provided in tlsio_openssl_compact_open and IO_OPEN_OK. ]*/
         ASSERT_IO_OPEN_CALLBACK(true, IO_OPEN_OK);
         ASSERT_ARE_EQUAL(char_ptr, umock_c_get_expected_calls(), umock_c_get_actual_calls());
 
