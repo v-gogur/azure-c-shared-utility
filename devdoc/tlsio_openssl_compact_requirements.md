@@ -6,11 +6,11 @@ tlsio_openssl_compact
 tlsio_openssl_compact implements a tlsio adapter for compact OpenSSL platforms.  
 
 ### Retry Behavior
-The fact that the `xio` specification contains both a `close` method and a `destroy` method implies that retry sequences must succeed. In other words, it must work to `close` and the re-`open` an adapter after an error has occurred during either an IO error or an error during the `open` sequence.
+The fact that the `xio` specification contains both a `close` method and a `destroy` method implies that retry sequences (open/fail/close/open) must succeed. In other words, it must work to `close` and the re-`open` an adapter after an error has occurred during either an IO error or an error during the `open` sequence.
 
 Here are some retry sequences defined for the use in requirements:
-* **Failed open retry** means a retry that occurs after `dowork` fails to establish its connection to the server.
-* **Failed i/o retry** means a retry that occurs after `dowork` has experienced a failure while sending or receiving messages through an established connection.
+* **Failed open retry** means a retry (close/open) that occurs after `dowork` fails to establish its connection to the server.
+* **Failed i/o retry** means a retry (close/open) that occurs after `dowork` has experienced a failure while sending or receiving messages through an established connection.
 
 ## References
 
