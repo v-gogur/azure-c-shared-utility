@@ -280,9 +280,9 @@ Connection completion may require multiple calls to `tlsio_openssl_compact_dowor
 
 The underlying API for OpenSSL is not capable of detecting useful errors when attempting to receive, so it will never call the `on_io_error` callback supplied during `tlsio_openssl_compact_open`.
 
-**SRS_TLSIO_OPENSSL_COMPACT_30_100: [** If the OpenSSL client is able to provide received data, the `tlsio_openssl_compact_dowork` shall read this data and call  `on_bytes_received` with the pointer to the buffer containing the data and the number of bytes received. **]**
+**SRS_TLSIO_OPENSSL_COMPACT_30_100: [** If the OpenSSL client is able to provide received data, the `tlsio_openssl_compact_dowork` shall read this data and call `on_bytes_received` with the pointer to the buffer containing the data, the number of bytes received, and the  `on_bytes_received_context`. **]**
 
-**SRS_TLSIO_OPENSSL_COMPACT_30_101: [** When `tlsio_openssl_compact_dowork` calls `on_bytes_received`, it shall pass the `on_bytes_received_context` handle as a parameter. **]**
+**SRS_TLSIO_OPENSSL_COMPACT_30_102: [** If the OpenSSL client gets no data from its `SSL_recv` call then it shall not call the  `on_bytes_received` callback. **]**
 
 
 ###   tlsio_openssl_compact_setoption
