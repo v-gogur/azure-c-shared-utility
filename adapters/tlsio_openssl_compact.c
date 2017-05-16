@@ -15,6 +15,7 @@
 #include "azure_c_shared_utility/dns_async.h"
 #include "azure_c_shared_utility/socket_async.h"
 #include "azure_c_shared_utility/singlylinkedlist.h"
+#include "azure_c_shared_utility/crt_abstractions.h"
 
 typedef struct PENDING_SOCKET_IO_TAG
 {
@@ -311,8 +312,9 @@ CONCRETE_IO_HANDLE tlsio_openssl_create(void* io_create_parameters)
                     result->dns = NULL;
                     result->pending_io_list = NULL;
                     result->operation_timeout_end_time = 0;
-                    result->hostname = (char*)malloc(strlen(tls_io_config->hostname) + 1);
-                    if (result->hostname == NULL)
+                    /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_016: [ tlsio_openssl_compact_create shall make a copy of the hostname member of io_create_parameters to allow deletion of hostname immediately after the call. ]*/
+                    int ms_result = mallocAndStrcpy_s(&result->hostname, tls_io_config->hostname);
+                    if (ms_result != 0)
                     {
                         /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_011: [ If any resource allocation fails, tlsio_openssl_compact_create shall return NULL. ]*/
                         LogError(allocate_fail_message);
@@ -321,8 +323,6 @@ CONCRETE_IO_HANDLE tlsio_openssl_create(void* io_create_parameters)
                     }
                     else
                     {
-                        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_016: [ tlsio_openssl_compact_create shall make a copy of the hostname member of io_create_parameters to allow deletion of hostname immediately after the call. ]*/
-                        (void)strcpy(result->hostname, tls_io_config->hostname);
                         // Create the message queue
                         result->pending_io_list = singlylinkedlist_create();
                         if (result->pending_io_list == NULL)

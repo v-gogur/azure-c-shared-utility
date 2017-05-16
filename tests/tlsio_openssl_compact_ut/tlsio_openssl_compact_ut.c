@@ -1,12 +1,24 @@
 // Copyright (c) Microsoft. All rights reserved.
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
+#include <stdint.h>
+
 #ifdef __cplusplus
 #include <cstdlib>
 #else
 #include <stdlib.h>
-#include <stdint.h>
 #include <stdbool.h>
+#endif
+
+/**
+ * Include the C standards here.
+ */
+#ifdef __cplusplus
+#include <cstddef>
+#include <ctime>
+#else
+#include <stddef.h>
+#include <time.h>
 #endif
 
 /**
@@ -28,17 +40,6 @@ static void my_gballoc_free(void* ptr)
 {
     free(ptr);
 }
-
-/**
- * Include the C standards here.
- */
-#ifdef __cplusplus
-#include <cstddef>
-#include <ctime>
-#else
-#include <stddef.h>
-#include <time.h>
-#endif
 
 
  /**
@@ -99,21 +100,8 @@ static void on_umock_c_error(UMOCK_C_ERROR_CODE error_code)
 static TEST_MUTEX_HANDLE g_testByTest;
 static TEST_MUTEX_HANDLE g_dllByDll;
 
-/**
- * Tests begin here. Give a name for your test, for instance template_ut, use the same 
- *   name to close the test suite on END_TEST_SUITE(template_empty_ut), and to identify the  
- *   test suit in the main() function 
- *   
- *   RUN_TEST_SUITE(template_empty_ut, failedTestCount);
- *
- */
 BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
 
-    /**
-     * This is the place where we initialize the test system. Replace the test name to associate the test 
-     *   suite with your test cases.
-     * It is called once, before start the tests.
-     */
     TEST_SUITE_INITIALIZE(a)
     {
         int result;
@@ -130,12 +118,6 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
         umocktypes_stdint_register_types();
         ASSERT_ARE_EQUAL(int, 0, result);
 
-        /**
-         * It is necessary to identify the types defined on your target. With it, the test system will 
-         *    know how to use it. 
-         *
-         * On the target.h example, there is the type TARGET_HANDLE that is a void*
-         */
         REGISTER_UMOCK_ALIAS_TYPE(SSL, void*);
         REGISTER_UMOCK_ALIAS_TYPE(SSL_CTX, void*);
         REGISTER_UMOCK_ALIAS_TYPE(SOCKET_ASYNC_OPTIONS_HANDLE, void*);
@@ -180,10 +162,6 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
         REGISTER_GLOBAL_MOCK_FAIL_RETURN(gballoc_malloc, NULL);
         REGISTER_GLOBAL_MOCK_HOOK(gballoc_free, my_gballoc_free);
 
-        /**
-         * You can initialize other global variables here, for instance image that you have a standard void* that will be converted
-         *   any pointer that your test needs.
-         */
         tlsio_config.hostname = SSL_good_old_host_name;
     }
 

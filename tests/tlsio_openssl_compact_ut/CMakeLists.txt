@@ -13,6 +13,7 @@ ${theseTestsName}.c
 set(${theseTestsName}_c_files
 ../../adapters/tlsio_openssl_compact.c
 ../../src/singlylinkedlist.c
+../../src/crt_abstractions.c
 )
 
 set(${theseTestsName}_h_files
