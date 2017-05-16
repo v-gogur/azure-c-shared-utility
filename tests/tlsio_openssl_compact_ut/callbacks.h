@@ -95,18 +95,13 @@ static void on_io_close_complete(void* context)
 static void on_bytes_received(void* context, const unsigned char* buffer, size_t size)
 {
     on_bytes_received_call_count++;
-    // There's no interesting tlsio behavior to test with
-    // varying message lengths, so we'll just use a tiny one.
-    //buffer[0] = 4;
-    //buffer[1] = 2;
-    //return 2;
     on_bytes_received_context_ok = context == IO_BYTES_RECEIVED_CONTEXT;
-    ASSERT_ARE_EQUAL(int, 4, (int)buffer[0]);
-    ASSERT_ARE_EQUAL(int, 2, (int)buffer[1]);
-    ASSERT_ARE_EQUAL(int, 2, (int)size);
-    context;
-    buffer;
-    size;
+
+    ASSERT_ARE_EQUAL(size_t, DOWORK_RECV_XFER_BUFFER_SIZE, size);
+    for (int i = 0; i < DOWORK_RECV_XFER_BUFFER_SIZE; i++)
+    {
+        ASSERT_ARE_EQUAL(char, RECEIVE_TEST_MESSAGE[i], buffer[i]);
+    }
 }
 
 static void on_io_error(void* context)

@@ -5,13 +5,14 @@
 
 #define SETOPTION_PV_COUNT 3
 #define OPEN_PV_COUNT 4
+#define SEND_PV_COUNT 3
 
 static TLSIO_CONFIG good_config = { SSL_good_host_name, SSL_good_port_number, NULL, NULL };
+static TLSIO_CONFIG tlsio_config = { NULL, SSL_good_port_number, NULL, NULL };
 
 static bool bool_true = true;
 static bool bool_false = false;
 static size_t sizeof_bool = sizeof(bool);
-
 
 typedef struct
 {

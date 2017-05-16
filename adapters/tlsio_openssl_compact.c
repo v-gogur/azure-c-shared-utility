@@ -512,7 +512,7 @@ int tlsio_openssl_send(CONCRETE_IO_HANDLE tls_io, const void* buffer, size_t siz
                     PENDING_SOCKET_IO* pending_socket_io = (PENDING_SOCKET_IO*)malloc(sizeof(PENDING_SOCKET_IO));
                     if (pending_socket_io == NULL)
                     {
-                        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_064: [ If the supplied message cannot be enqueued for transmission, tlsio_openssl_compact_send shall call the on_send_complete with IO_SEND_ERROR, and return FAILURE. ]*/
+                        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_064: [ If the supplied message cannot be enqueued for transmission, tlsio_openssl_compact_send shall return FAILURE. ]*/
                         result = __FAILURE__;
                         LogError(allocate_fail_message);
                     }
@@ -531,7 +531,7 @@ int tlsio_openssl_send(CONCRETE_IO_HANDLE tls_io, const void* buffer, size_t siz
 
                         if (pending_socket_io->bytes == NULL && size > 0)
                         {
-                            /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_064: [ If the supplied message cannot be enqueued for transmission, tlsio_openssl_compact_send shall call the on_send_complete with IO_SEND_ERROR, and return FAILURE. ]*/
+                            /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_064: [ If the supplied message cannot be enqueued for transmission, tlsio_openssl_compact_send shall return FAILURE. ]*/
                             LogError(allocate_fail_message);
                             free(pending_socket_io);
                             result = __FAILURE__;
@@ -548,6 +548,7 @@ int tlsio_openssl_send(CONCRETE_IO_HANDLE tls_io, const void* buffer, size_t siz
                             }
                             if (singlylinkedlist_add(tls_io_instance->pending_io_list, pending_socket_io) == NULL)
                             {
+                                /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_064: [ If the supplied message cannot be enqueued for transmission, tlsio_openssl_compact_send shall return FAILURE. ]*/
                                 LogError("Unable to add socket to pending list.");
                                 free(pending_socket_io->bytes);
                                 free(pending_socket_io);

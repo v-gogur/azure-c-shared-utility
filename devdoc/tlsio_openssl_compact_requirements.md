@@ -217,7 +217,7 @@ int tlsio_openssl_compact_send(CONCRETE_IO_HANDLE tlsio_handle, const void* buff
 
 **SRS_TLSIO_OPENSSL_COMPACT_30_063: [** The `tlsio_openssl_compact_send` shall enqueue for transmission the `on_send_complete`, the `callback_context`, the `size`, and the contents of `buffer`. **]**
 
-**SRS_TLSIO_OPENSSL_COMPACT_30_064: [** If the supplied message cannot be enqueued for transmission, `tlsio_openssl_compact_send` shall call the `on_send_complete` with IO_SEND_ERROR, and return _FAILURE_. **]**
+**SRS_TLSIO_OPENSSL_COMPACT_30_064: [** If the supplied message cannot be enqueued for transmission, `tlsio_openssl_compact_send` shall return _FAILURE_. **]**
 
 **SRS_TLSIO_OPENSSL_COMPACT_30_065: [** If `tlsio_openssl_compact_open` has not been called or the opening process has not been completed, `tlsio_openssl_compact_send` shall log an error and return _FAILURE_. **]**
 
