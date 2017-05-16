@@ -192,13 +192,15 @@ int tlsio_openssl_compact_close(CONCRETE_IO_HANDLE tlsio_handle, ON_IO_CLOSE_COM
 
 **SRS_TLSIO_OPENSSL_COMPACT_30_051: [** The `tlsio_openssl_compact_close` shall forcibly close any existing ssl connection. **]**
 
-**SRS_TLSIO_OPENSSL_COMPACT_30_052: [** The `tlsio_openssl_compact_close` return value shall be 0 except as noted in the next requirement. **]**
+**SRS_TLSIO_OPENSSL_COMPACT_30_052: [** The `tlsio_openssl_compact_close` return value shall be 0 unless  `tlsio_openssl_compact_open` has not been called previously. **]**
 
 **SRS_TLSIO_OPENSSL_COMPACT_30_053: [** If `tlsio_openssl_compact_open` has not been called previously then `tlsio_openssl_compact_close` shall log an error and return _FAILURE_. **]**
 
 **SRS_TLSIO_OPENSSL_COMPACT_30_054: [** If `tlsio_openssl_compact_open` has been called  but the process of opening has not been completed, then the `on_io_open_complete` callback shall be made with `IO_OPEN_CANCELLED`. **]**
 
 **SRS_TLSIO_OPENSSL_COMPACT_30_056: [** If `tlsio_openssl_compact_close` is called while there are unsent messages in the queue, the `tlsio_openssl_compact_close` shall call each message's  `on_send_complete`, passing its associated `callback_context` and `IO_SEND_CANCELLED`. **]**
+
+**SRS_TLSIO_OPENSSL_COMPACT_30_057: [** When the closing process is complete, `tlsio_openssl_compact_close`  shall call `on_io_close_complete` and pass the `callback_context` as a parameter. **]**
 
 
 ###   tlsio_openssl_compact_send

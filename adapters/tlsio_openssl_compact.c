@@ -134,8 +134,6 @@ static void check_for_open_timeout(TLS_IO_INSTANCE* tls_io_instance)
     time_t now = get_time(NULL);
     if (now > tls_io_instance->operation_timeout_end_time)
     {
-        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30XX_074: [ The tlsio_openssl_compact_send shall spend no longer than the internally defined SSL_MAX_BLOCK_TIME_SECONDS (20 seconds) attempting to perform the SSL_connect operation. ]*/
-        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30XX_030: [ If tlsio_openssl_compact_dowork fails to open the ssl connection it shall call on_io_open_complete with IO_OPEN_ERROR. ]*/
         // This has taken too long, so bail out
         LogInfo("Timeout while opening tlsio");
         enter_open_error_state(tls_io_instance);
@@ -144,7 +142,7 @@ static void check_for_open_timeout(TLS_IO_INSTANCE* tls_io_instance)
 
 static void internal_close(TLS_IO_INSTANCE* tls_io_instance)
 {
-    /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30XX_017:  [ The tlsio_openssl_compact_destroy shall release all allocated resources and then release tlsio_handle. ]*/
+    /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_051: [ The tlsio_openssl_compact_close shall forcibly close any existing ssl connection. ]*/
     if (tls_io_instance->tlsio_state == TLSIO_STATE_OPEN)
     {
         // From the OpenSSL manual pages: "According to the TLS standard, it is acceptable 
@@ -179,7 +177,7 @@ static void internal_close(TLS_IO_INSTANCE* tls_io_instance)
         tls_io_instance->sock = -1;
     }
 
-    /* clear all pending IOs */
+    /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_056: [ If tlsio_openssl_compact_close is called while there are unsent messages in the queue, the tlsio_openssl_compact_close shall call each message's on_send_complete, passing its associated callback_context and IO_SEND_CANCELLED. ]*/
     while (close_and_destroy_head_message(tls_io_instance, IO_SEND_CANCELLED));
     // singlylinkedlist_destroy gets called in the main destroy
 
@@ -438,51 +436,50 @@ int tlsio_openssl_close(CONCRETE_IO_HANDLE tls_io, ON_IO_CLOSE_COMPLETE on_io_cl
     TLS_IO_INSTANCE* tls_io_instance = (TLS_IO_INSTANCE*)tls_io;
     if (tls_io == NULL)
     {
-        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30XX_033: [ If the tlsio_handle parameter is NULL, tlsio_openssl_compact_close shall log an error and return FAILURE. ]*/
+        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_050: [ If the tlsio_handle parameter is NULL, tlsio_openssl_compact_close shall log an error and return FAILURE. ]*/
         result = __FAILURE__;
         LogError(null_tlsio_message);
     }
     else
     {
         /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30XX_035: [ The tlsio_openssl_compact_close return value shall be 0 except as noted in the next requirement. ] */
-        result = 0;
         if (tls_io_instance->tlsio_state == TLSIO_STATE_NOT_OPEN)
         {
-            /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30XX_036: [ If tlsio_openssl_compact_open has not been called then tlsio_openssl_compact_close shall log an error and return FAILURE. ] */
-            /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30XX_060: [ If tlsio_openssl_compact_open has been called but the process of opening has not been completed, then the on_io_open_complete callback shall be made with IO_SEND_CANCELLED. ] */
+            /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_053: [ If tlsio_openssl_compact_open has not been called previously then tlsio_openssl_compact_close shall log an error and return FAILURE. ]*/
             result = __FAILURE__;
             LogError("tlsio_openssl_close has been called with no prior successful open.");
         }
-        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30XX_034: [ The tlsio_openssl_compact_close shall forcibly close any existing ssl connection. ] */
+        else
+        {
+            /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_052: [ The tlsio_openssl_compact_close return value shall be 0 unless tlsio_openssl_compact_open has not been called previously. ]*/
+            result = 0;
+            if (tls_io_instance->tlsio_state != TLSIO_STATE_OPEN &&
+                tls_io_instance->tlsio_state != TLSIO_STATE_ERROR)
+            {
+                // This is one of the OPENING states
+                /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_054: [ If tlsio_openssl_compact_open has been called but the process of opening has not been completed, then the on_io_open_complete callback shall be made with IO_OPEN_CANCELLED. ]*/
+                tls_io_instance->on_open_complete(tls_io_instance->on_open_complete_context, IO_OPEN_CANCELLED);
+            }
+        }
         internal_close(tls_io_instance);
     }
 
-    /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30XX_007: [ If the callback function is set as NULL, the tlsio_openssl_compact shall not call anything. ] */
     if (on_io_close_complete != NULL)
     {
-        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30XX_002: [ The tlsio_openssl_compact shall report the open operation status using the IO_OPEN_RESULT enumerator defined in the xio.h ]*/
-        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30XX_006: [ The tlsio_openssl_compact shall return the status of all async operations using the callbacks. ]*/
-        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30XX_037: [ If on_io_close_complete is provided, tlsio_openssl_compact_close shall call on_io_close_complete. ] */
-        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30XX_038: [ If on_io_close_complete is provided, tlsio_openssl_compact_close shall pass the callback_context handle into the on_io_close_complete call. ] */
+        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_057: [ When the closing process is complete, tlsio_openssl_compact_close shall call on_io_close_complete and pass the callback_context as a parameter. ]*/
         on_io_close_complete(callback_context);
     }
-
-
-    /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30XX_76: [ If tlsio_openssl_compact_close is called while there are unsent messages in the queue, the tlsio_openssl_compact_close shall call on_send_complete with IO_SEND_ERROR for each message. ]*/
-
-
 
     return result;
 }
 
-/* Codes_SRS_TLSIO_OPENSSL_COMPACT_30XX_004: [ The tlsio_openssl_compact shall call the callbacks functions defined in the xio.h ]*/
 int tlsio_openssl_send(CONCRETE_IO_HANDLE tls_io, const void* buffer, size_t size, ON_SEND_COMPLETE on_send_complete, void* callback_context)
 {
     int result;
     TLS_IO_INSTANCE* tls_io_instance = (TLS_IO_INSTANCE*)tls_io;
     if (tls_io_instance == NULL)
     {
-        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30XX_039: [ If the tlsio_handle parameter is NULL, tlsio_openssl_compact_send shall log an error and return FAILURE. ]*/
+        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_060: [ If the tlsio_handle parameter is NULL, tlsio_openssl_compact_send shall log an error and return FAILURE. ]*/
         result = __FAILURE__;
         LogError(null_tlsio_message);
     }
@@ -490,7 +487,7 @@ int tlsio_openssl_send(CONCRETE_IO_HANDLE tls_io, const void* buffer, size_t siz
     {
         if (on_send_complete == NULL)
         {
-            /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30XX_075: [ If the on_send_complete is NULL, tlsio_openssl_compact_send shall log the error and return FAILURE. ]*/
+            /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_062: [ If the on_send_complete is NULL, tlsio_openssl_compact_send shall log the error and return FAILURE. ]*/
             result = __FAILURE__;
             LogError("NULL on_send_complete");
         }
@@ -498,7 +495,7 @@ int tlsio_openssl_send(CONCRETE_IO_HANDLE tls_io, const void* buffer, size_t siz
         {
             if (buffer == NULL)
             {
-                /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30XX_046: [ If the buffer is NULL, the tlsio_openssl_compact_send shall log the error and return FAILURE. ]*/
+                /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_061: [ If the buffer is NULL, tlsio_openssl_compact_send shall log the error and return FAILURE. ]*/
                 result = __FAILURE__;
                 LogError("NULL buffer.");
             }
@@ -506,7 +503,7 @@ int tlsio_openssl_send(CONCRETE_IO_HANDLE tls_io, const void* buffer, size_t siz
             {
                 if (tls_io_instance->tlsio_state != TLSIO_STATE_OPEN)
                 {
-                    /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30XX_072: [ If tlsio_openssl_compact_open has not been called or the opening process has not been completed, tlsio_openssl_compact_send shall log an error and return FAILURE. ]*/
+                    /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_065: [ If tlsio_openssl_compact_open has not been called or the opening process has not been completed, tlsio_openssl_compact_send shall log an error and return FAILURE. ]*/
                     result = __FAILURE__;
                     LogError("tlsio_openssl_send without a prior successful open.");
                 }
@@ -515,12 +512,13 @@ int tlsio_openssl_send(CONCRETE_IO_HANDLE tls_io, const void* buffer, size_t siz
                     PENDING_SOCKET_IO* pending_socket_io = (PENDING_SOCKET_IO*)malloc(sizeof(PENDING_SOCKET_IO));
                     if (pending_socket_io == NULL)
                     {
+                        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_064: [ If the supplied message cannot be enqueued for transmission, tlsio_openssl_compact_send shall call the on_send_complete with IO_SEND_ERROR, and return FAILURE. ]*/
                         result = __FAILURE__;
                         LogError(allocate_fail_message);
                     }
                     else
                     {
-                        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30XX_040: [ The tlsio_openssl_compact_send shall enqueue the size bytes in buffer for transmission to the ssl connection. ]*/
+                        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_063: [ The tlsio_openssl_compact_send shall enqueue for transmission the on_send_complete, the callback_context, the size, and the contents of buffer. ]*/
                         // Accept messages of length zero, but don't allocate memory for them
                         if (size > 0)
                         {
@@ -533,7 +531,7 @@ int tlsio_openssl_send(CONCRETE_IO_HANDLE tls_io, const void* buffer, size_t siz
 
                         if (pending_socket_io->bytes == NULL && size > 0)
                         {
-                            /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30XX_070: [ if the supplied message cannot be enqueued for transmission, tlsio_openssl_compact_send shall call the on_send_complete with IO_SEND_ERROR, and return FAILURE. ]*/
+                            /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_064: [ If the supplied message cannot be enqueued for transmission, tlsio_openssl_compact_send shall call the on_send_complete with IO_SEND_ERROR, and return FAILURE. ]*/
                             LogError(allocate_fail_message);
                             free(pending_socket_io);
                             result = __FAILURE__;
@@ -578,16 +576,20 @@ static void dowork_read(TLS_IO_INSTANCE* tls_io_instance)
     unsigned char buffer[DOWORK_TRANSFER_BUFFER_SIZE];
     int rcv_bytes;
 
-    // SSL_read is not checked for errors because it never reports anything useful
+    // SSL_read is not checked for errors because the "no data" condition is reported as a 
+    // failure, but the docs do not guarantee that it will always be the same failure,
+    // so we have no reliable wayto distinguish "no data" from something else.
     rcv_bytes = SSL_read(tls_io_instance->ssl, buffer, sizeof(buffer));
     if (rcv_bytes > 0)
     {
         // tls_io_instance->on_bytes_received was already checked for NULL
         // in the call to tlsio_openssl_open
-        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30XX_006: [ The tlsio_openssl_compact shall return the status of all async operations using the callbacks. ]*/
-        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30XX_049: [ If the ssl client is able to provide received data, the tlsio_openssl_compact_dowork shall read this data and call on_bytes_received with the pointer to the buffer containing the data and the number of bytes received. ]*/
-        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30XX_050: [ When tlsio_openssl_compact_dowork calls on_bytes_received, it shall pass the on_bytes_received_context handle as a parameter. ]*/
+        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_100: [ If the OpenSSL client is able to provide received data, the tlsio_openssl_compact_dowork shall read this data and call on_bytes_received with the pointer to the buffer containing the data, the number of bytes received, and the on_bytes_received_context. ]*/
         tls_io_instance->on_bytes_received(tls_io_instance->on_bytes_received_context, buffer, rcv_bytes);
+    }
+    else
+    {
+        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_102: [ If the OpenSSL client gets no data from its SSL_recv call then it shall not call the on_bytes_received callback. ]*/
     }
 }
 
@@ -601,7 +603,7 @@ static int create_ssl(TLS_IO_INSTANCE* tls_io_instance)
         tls_io_instance->ssl_context = SSL_CTX_new(TLSv1_2_client_method());
         if (tls_io_instance->ssl_context == NULL)
         {
-            /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30XX_030: [ If tlsio_openssl_compact_dowork fails to open the ssl connection it shall call on_io_open_complete with IO_OPEN_ERROR. ]*/
+            /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_082: [ If the connection process fails for any reason, tlsio_openssl_compact_dowork shall log an error and call on_io_open_complete with the on_io_open_complete_context parameter provided in tlsio_openssl_compact_open and IO_OPEN_ERROR. ]*/
             result = __FAILURE__;
             LogError("create new SSL CTX failed");
         }
@@ -610,7 +612,7 @@ static int create_ssl(TLS_IO_INSTANCE* tls_io_instance)
             tls_io_instance->ssl = SSL_new(tls_io_instance->ssl_context);
             if (tls_io_instance->ssl == NULL)
             {
-                /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30XX_030: [ If tlsio_openssl_compact_dowork fails to open the ssl connection and the on_io_open_complete callback was provided, it shall call on_io_open_complete with IO_OPEN_ERROR. ]*/
+                /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_082: [ If the connection process fails for any reason, tlsio_openssl_compact_dowork shall log an error and call on_io_open_complete with the on_io_open_complete_context parameter provided in tlsio_openssl_compact_open and IO_OPEN_ERROR. ]*/
                 result = __FAILURE__;
                 LogError("SSL_new failed");
             }
@@ -620,7 +622,7 @@ static int create_ssl(TLS_IO_INSTANCE* tls_io_instance)
                 ret = SSL_set_fd(tls_io_instance->ssl, tls_io_instance->sock);
                 if (ret != 1)
                 {
-                    /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30XX_030: [ If tlsio_openssl_compact_dowork fails to open the ssl connection it shall call on_io_open_complete with IO_OPEN_ERROR. ]*/
+                    /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_082: [ If the connection process fails for any reason, tlsio_openssl_compact_dowork shall log an error and call on_io_open_complete with the on_io_open_complete_context parameter provided in tlsio_openssl_compact_open and IO_OPEN_ERROR. ]*/
                     result = __FAILURE__;
                     LogError("SSL_set_fd failed");
                 }
@@ -650,6 +652,7 @@ static void dowork_send(TLS_IO_INSTANCE* tls_io_instance)
         time_t now = time(NULL);
         if (now > tls_io_instance->operation_timeout_end_time)
         {
+            /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_092: [ If the send process for any given message takes longer than the internally defined TLSIO_OPERATION_TIMEOUT_SECONDS it call the message's on_send_complete along with its associated callback_context and IO_SEND_ERROR. ]*/
             LogInfo("send timeout");
             close_and_destroy_head_message(tls_io_instance, IO_SEND_ERROR);
         }
@@ -657,7 +660,7 @@ static void dowork_send(TLS_IO_INSTANCE* tls_io_instance)
         {
             if (pending_message->unsent_size == 0)
             {
-                /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30XX_047: [ If an enqueued message size is 0, the tlsio_openssl_compact_dowork shall just call the on_send_complete with IO_SEND_OK. ]*/
+                /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_090: [ If an enqueued message size is 0, the tlsio_openssl_compact_dowork shall just call the on_send_complete with IO_SEND_OK. ]*/
                 close_and_destroy_head_message(tls_io_instance, IO_SEND_OK);
             }
             else
@@ -672,14 +675,15 @@ static void dowork_send(TLS_IO_INSTANCE* tls_io_instance)
                     pending_message->unsent_size -= write_result;
                     if (pending_message->unsent_size == 0)
                     {
-                        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30XX_045: [ If the ssl was able to send all the bytes in an enqueued message, the tlsio_openssl_compact_dowork shall call the on_send_complete with IO_SEND_OK. ]*/
+                        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_091: [ If tlsio_openssl_compact_dowork is able to send all the bytes in an enqueued message, it shall call the messages's on_send_complete along with its associated callback_context and IO_SEND_OK. ]*/
                         // The whole message has been sent successfully
                         close_and_destroy_head_message(tls_io_instance, IO_SEND_OK);
                     }
                     else
                     {
-                        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30XX_043: [ if the ssl send was not able to send an entire enqueued message at once, tlsio_openssl_compact_dowork shall call the ssl again to send the remaining bytes. ]*/
+                        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_093: [ If the OpenSSL send was not able to send an entire enqueued message at once, subsequent calls to tlsio_openssl_compact_dowork shall repeat OpenSSL send for the remaining bytes. ]*/
                         // Repeat the send on the next pass with the rest of the message
+                        // This empty else compiles to nothing but helps readability
                     }
                 }
                 else
@@ -688,7 +692,7 @@ static void dowork_send(TLS_IO_INSTANCE* tls_io_instance)
                     int hard_error = is_hard_ssl_error(tls_io_instance->ssl, write_result);
                     if (hard_error != 0)
                     {
-                        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30XX_044: [ If the ssl fails before sending all of the bytes in an enqueued message, the tlsio_openssl_compact_dowork shall call the on_send_complete with IO_SEND_ERROR. ]*/
+                        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_095: [ If the send process fails before sending all of the bytes in an enqueued message, the tlsio_openssl_compact_dowork shall call the message's on_send_complete along with its associated callback_context and IO_SEND_ERROR. ]*/
                         // This is an unexpected error, and we need to bail out. Probably
                         // lost internet connection.
                         LogInfo("Error from SSL_write: %d", hard_error);
@@ -698,6 +702,10 @@ static void dowork_send(TLS_IO_INSTANCE* tls_io_instance)
             }
         }
     }
+    else
+    {
+        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_096: [ If there are no enqueued messages available, tlsio_openssl_compact_dowork shall do nothing. ]*/
+    }
 }
 
 static void dowork_poll_dns(TLS_IO_INSTANCE* tls_io_instance)
@@ -706,15 +714,13 @@ static void dowork_poll_dns(TLS_IO_INSTANCE* tls_io_instance)
 
     if (dns_is_complete)
     {
-        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30XX_014: [ The tlsio_openssl_compact_create shall convert the provided hostName to an IPv4 address. ]*/
-        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30XX_021: [ The tlsio_openssl_compact_open shall begin the process of opening the ssl connection with the host provided in the tlsio_openssl_compact_create call. ]*/
         tls_io_instance->host_ipV4_address = dns_async_get_ipv4(tls_io_instance->dns);
         dns_async_destroy(tls_io_instance->dns);
         tls_io_instance->dns = NULL;
         if (tls_io_instance->host_ipV4_address == 0)
         {
             // Transition to TSLIO_STATE_ERROR
-            /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30XX_015:  [ If the IP for the hostName cannot be found, tlsio_openssl_compact_dowork shall call on_io_open_complete with IO_OPEN_ERROR. ]*/
+            /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_082: [ If the connection process fails for any reason, tlsio_openssl_compact_dowork shall log an error and call on_io_open_complete with the on_io_open_complete_context parameter provided in tlsio_openssl_compact_open and IO_OPEN_ERROR. ]*/
             // The DNS failure has already been logged
             enter_open_error_state(tls_io_instance);
         }
@@ -724,7 +730,7 @@ static void dowork_poll_dns(TLS_IO_INSTANCE* tls_io_instance)
             if (sock < 0)
             {
                 // This is a communication interruption rather than a program bug
-                /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30XX_030: [ If tlsio_openssl_compact_dowork fails to open the ssl connection it shall call on_io_open_complete with IO_OPEN_ERROR. ]*/
+                /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_082: [ If the connection process fails for any reason, tlsio_openssl_compact_dowork shall log an error and call on_io_open_complete with the on_io_open_complete_context parameter provided in tlsio_openssl_compact_open and IO_OPEN_ERROR. ]*/
                 LogInfo("Could not open the socket");
                 enter_open_error_state(tls_io_instance);
             }
@@ -812,7 +818,7 @@ static void dowork_poll_open_ssl(TLS_IO_INSTANCE* tls_io_instance)
         int hard_error = is_hard_ssl_error(tls_io_instance->ssl, connect_result);
         if (hard_error != 0)
         {
-            /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30XX_030: [ If tlsio_openssl_compact_dowork fails to open the ssl connection it shall call on_io_open_complete with IO_OPEN_ERROR. ]*/
+            /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_082: [ If the connection process fails for any reason, tlsio_openssl_compact_dowork shall log an error and call on_io_open_complete with the on_io_open_complete_context parameter provided in tlsio_openssl_compact_open and IO_OPEN_ERROR. ]*/
             LogInfo("Hard error from SSL_connect: %d", hard_error);
             enter_open_error_state(tls_io_instance);
         }
@@ -857,6 +863,8 @@ void tlsio_openssl_dowork(CONCRETE_IO_HANDLE tls_io)
             dowork_send(tls_io_instance);
             break;
         case TLSIO_STATE_ERROR:
+            /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_071: [ If the tlsio_openssl_compact adapter has returned a failure from tlsio_openssl_compact_open or if on_io_open_complete has been called with IO_OPEN_ERROR or IO_OPEN_CANCELLED, then tlsio_openssl_compact_dowork shall do nothing. ]*/
+            /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_072: [ If tlsio_openssl_compact_dowork ever calls on_io_error, then subsequent calls to tlsio_openssl_compact_dowork shall do nothing. ]*/
             // There's nothing valid to do here but wait to be retried
             break;
         default:
