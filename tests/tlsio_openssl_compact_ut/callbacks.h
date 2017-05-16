@@ -26,6 +26,7 @@ void ThreadAPI_Sleep(unsigned int milliseconds)
 /////////////////////////////////////////////////////////////////////
 
 
+#define MAX_MESSAGE_COUNT 3
 
 // Keep track of whether callbacks were performed as expected
 static int on_io_open_complete_call_count;
@@ -40,7 +41,7 @@ static bool on_io_close_context_ok;
 
 static int on_io_send_complete_call_count;
 static bool on_io_send_complete_context_ok;
-static IO_SEND_RESULT on_io_send_complete_result;
+static IO_SEND_RESULT on_io_send_complete_result[MAX_MESSAGE_COUNT];
 
 static int on_bytes_received_call_count;
 static bool on_bytes_received_context_ok;
@@ -63,7 +64,10 @@ static void reset_callback_context_records()
     on_io_close_context_ok = true;
     on_io_send_complete_call_count = 0;
     on_io_send_complete_context_ok = true;
-    on_io_send_complete_result = (IO_SEND_RESULT)-1;
+    for (int i = 0; i < MAX_MESSAGE_COUNT; i++)
+    {
+        on_io_send_complete_result[i] = (IO_SEND_RESULT)-1;
+    }
     on_bytes_received_call_count = 0;
     on_bytes_received_context_ok = true;
 }
@@ -72,7 +76,7 @@ static void reset_callback_context_records()
 
 static void on_io_open_complete(void* context, IO_OPEN_RESULT open_result)
 {
-    bool result_valid = open_result == IO_OPEN_OK || open_result == IO_OPEN_ERROR;
+    bool result_valid = open_result == IO_OPEN_OK || open_result == IO_OPEN_ERROR || open_result == IO_OPEN_CANCELLED;
     ASSERT_IS_TRUE_WITH_MSG(result_valid, "Invalid IO_OPEN_RESULT");
     on_io_open_complete_call_count++;
     on_io_open_complete_result = open_result;
@@ -84,8 +88,8 @@ static void on_io_open_complete(void* context, IO_OPEN_RESULT open_result)
 
 static void on_io_send_complete(void* context, IO_SEND_RESULT send_result)
 {
+    on_io_send_complete_result[on_io_send_complete_call_count] = send_result;
     on_io_send_complete_call_count++;
-    on_io_send_complete_result = send_result;
     if (context != IO_SEND_COMPLETE_CONTEXT)
     {
         on_io_send_complete_context_ok = false;
@@ -154,12 +158,22 @@ static void ASSERT_IO_SEND_CALLBACK(bool called, int send_result)
     if (called)
     {
         ASSERT_ARE_EQUAL_WITH_MSG(int, 1, on_io_send_complete_call_count, "on_io_send_complete_callback count mismatch");
-        ASSERT_ARE_EQUAL_WITH_MSG(int, on_io_send_complete_result, send_result, "on_io_send_complete result mismatch");
+        ASSERT_ARE_EQUAL_WITH_MSG(int, on_io_send_complete_result[0], send_result, "on_io_send_complete result mismatch");
         ASSERT_IS_TRUE_WITH_MSG(on_io_send_complete_context_ok, "io_send_complete_context not passed");
     }
     else
     {
         ASSERT_ARE_EQUAL_WITH_MSG(int, 0, on_io_open_complete_call_count, "unexpected on_io_open_complete_callback");
+    }
+}
+
+static void ASSERT_IO_SEND_ABANDONED(int count)
+{
+    ASSERT_ARE_EQUAL_WITH_MSG(int, count, on_io_send_complete_call_count, "on_io_send_complete_callback count mismatch");
+    ASSERT_IS_TRUE_WITH_MSG(on_io_send_complete_context_ok, "io_send_complete_context not passed");
+    for (int i = 0; i < on_io_send_complete_call_count; i++)
+    {
+        ASSERT_ARE_EQUAL_WITH_MSG(int, IO_SEND_CANCELLED, on_io_send_complete_result[i], "send result should be IO_SEND_CANCELLED");
     }
 }
 

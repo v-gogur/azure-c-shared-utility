@@ -238,6 +238,223 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
         ASSERT_IO_OPEN_CALLBACK(true, IO_OPEN_OK);
     }
 
+    /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_050: [ If the tlsio_handle parameter is NULL, tlsio_openssl_compact_close shall log an error and return FAILURE. ]*/
+    /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_055: [ If the tlsioon_io_close_complete_handle parameter is NULL, tlsio_openssl_compact_close shall log an error and return FAILURE. ]*/
+    TEST_FUNCTION(tlsio_openssl_compact__close_parameter_validation__fails)
+    {
+        ///arrange
+        const IO_INTERFACE_DESCRIPTION* tlsio_id = tlsio_get_interface_description();
+        CONCRETE_IO_HANDLE tlsio = tlsio_id->concrete_io_create(&good_config);
+
+        umock_c_reset_all_calls();
+
+        bool p0[CLOSE_PV_COUNT];
+        ON_IO_CLOSE_COMPLETE p1[CLOSE_PV_COUNT];
+        const char* fm[CLOSE_PV_COUNT];
+
+        int k = 0;
+        p0[k] = false; p1[k] = on_io_close_complete; fm[k] = "Unexpected close success when tlsio_handle is NULL"; /* */  k++;
+        p0[k] = true; p1[k] = NULL; /*           */ fm[k] = "Unexpected close success when on_io_close_complete is NULL"; k++;
+
+        // Cycle through each failing combo of parameters
+        for (int i = 0; i < CLOSE_PV_COUNT; i++)
+        {
+            ///arrange
+
+            ///act
+            int close_result = tlsio_id->concrete_io_close(p0[i] ? tlsio : NULL, p1[i], IO_CLOSE_COMPLETE_CONTEXT);
+
+            ///assert
+            ASSERT_ARE_NOT_EQUAL_WITH_MSG(int, 0, close_result, fm[i]);
+        }
+
+        ///cleanup
+        tlsio_id->concrete_io_destroy(tlsio);
+    }
+
+    /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_080: [ The tlsio_openssl_compact_dowork shall establish an OpenSSL connection using the hostName and port provided during tlsio_openssl_compact_open. ]*/
+    /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_083: [ If tlsio_openssl_compact_dowork successfully opens the ssl connection it shall call on_io_open_complete with the on_io_open_complete_context parameter provided in tlsio_openssl_compact_open and IO_OPEN_OK. ]*/
+    TEST_FUNCTION(tlsio_openssl_compact__close_with_unsent_messages__succeeds)
+    {
+        ///arrange
+        reset_callback_context_records();
+        const IO_INTERFACE_DESCRIPTION* tlsio_id = tlsio_get_interface_description();
+        CONCRETE_IO_HANDLE tlsio = tlsio_id->concrete_io_create(&good_config);
+        open_helper(tlsio_id, tlsio);
+
+        // Make sure the arrangement is correct
+        ASSERT_IO_OPEN_CALLBACK(true, IO_OPEN_OK);
+
+        int send_result = tlsio_id->concrete_io_send(tlsio, SSL_send_buffer,
+            SSL_SHORT_MESSAGE_SIZE, on_io_send_complete, IO_SEND_COMPLETE_CONTEXT);
+        ASSERT_ARE_EQUAL(int, send_result, 0);
+        send_result = tlsio_id->concrete_io_send(tlsio, SSL_send_buffer,
+            SSL_SHORT_MESSAGE_SIZE, on_io_send_complete, IO_SEND_COMPLETE_CONTEXT);
+        ASSERT_ARE_EQUAL(int, send_result, 0);
+
+
+        umock_c_reset_all_calls();
+        STRICT_EXPECTED_CALL(SSL_shutdown(SSL_Good_Ptr));
+        STRICT_EXPECTED_CALL(SSL_free(SSL_Good_Ptr));
+        STRICT_EXPECTED_CALL(SSL_CTX_free(SSL_Good_Context_Ptr));
+        STRICT_EXPECTED_CALL(socket_async_destroy(SSL_Good_Socket));
+        // Message 1 delete
+        STRICT_EXPECTED_CALL(gballoc_free(IGNORED_PTR_ARG));
+        STRICT_EXPECTED_CALL(gballoc_free(IGNORED_PTR_ARG));
+        STRICT_EXPECTED_CALL(gballoc_free(IGNORED_PTR_ARG));
+        // Message 2 delete
+        STRICT_EXPECTED_CALL(gballoc_free(IGNORED_PTR_ARG));
+        STRICT_EXPECTED_CALL(gballoc_free(IGNORED_PTR_ARG));
+        STRICT_EXPECTED_CALL(gballoc_free(IGNORED_PTR_ARG));
+        // End of arrange
+
+        ///act
+        tlsio_id->concrete_io_close(tlsio, on_io_close_complete, IO_CLOSE_COMPLETE_CONTEXT);
+
+        ///assert
+        ASSERT_IO_SEND_ABANDONED(2); // 2 messages in this test
+        ASSERT_ARE_EQUAL(char_ptr, umock_c_get_expected_calls(), umock_c_get_actual_calls());
+
+
+        ///cleanup
+        tlsio_id->concrete_io_close(tlsio, on_io_close_complete, NULL);
+        tlsio_id->concrete_io_destroy(tlsio);
+    }
+
+    /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_080: [ The tlsio_openssl_compact_dowork shall establish an OpenSSL connection using the hostName and port provided during tlsio_openssl_compact_open. ]*/
+    /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_083: [ If tlsio_openssl_compact_dowork successfully opens the ssl connection it shall call on_io_open_complete with the on_io_open_complete_context parameter provided in tlsio_openssl_compact_open and IO_OPEN_OK. ]*/
+    TEST_FUNCTION(tlsio_openssl_compact__close_unopened__succeeds)
+    {
+        ///arrange
+        reset_callback_context_records();
+        const IO_INTERFACE_DESCRIPTION* tlsio_id = tlsio_get_interface_description();
+        CONCRETE_IO_HANDLE tlsio = tlsio_id->concrete_io_create(&good_config);
+        ASSERT_IO_OPEN_CALLBACK(false, IO_OPEN_OK);
+        umock_c_reset_all_calls();
+
+        ///act
+        tlsio_id->concrete_io_close(tlsio, on_io_close_complete, IO_CLOSE_COMPLETE_CONTEXT);
+
+        ///assert
+        ASSERT_IO_CLOSE_CALLBACK(true);
+        ASSERT_ARE_EQUAL(char_ptr, umock_c_get_expected_calls(), umock_c_get_actual_calls());
+
+        ///cleanup
+        tlsio_id->concrete_io_close(tlsio, on_io_close_complete, NULL);
+        tlsio_id->concrete_io_destroy(tlsio);
+    }
+
+    /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_080: [ The tlsio_openssl_compact_dowork shall establish an OpenSSL connection using the hostName and port provided during tlsio_openssl_compact_open. ]*/
+    /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_083: [ If tlsio_openssl_compact_dowork successfully opens the ssl connection it shall call on_io_open_complete with the on_io_open_complete_context parameter provided in tlsio_openssl_compact_open and IO_OPEN_OK. ]*/
+    TEST_FUNCTION(tlsio_openssl_compact__close_after_open__succeeds)
+    {
+        ///arrange
+        reset_callback_context_records();
+        const IO_INTERFACE_DESCRIPTION* tlsio_id = tlsio_get_interface_description();
+        CONCRETE_IO_HANDLE tlsio = tlsio_id->concrete_io_create(&good_config);
+        open_helper(tlsio_id, tlsio);
+
+        // Make sure the arrangement is correct
+        ASSERT_IO_OPEN_CALLBACK(true, IO_OPEN_OK);
+
+        umock_c_reset_all_calls();
+        STRICT_EXPECTED_CALL(SSL_shutdown(SSL_Good_Ptr));
+        STRICT_EXPECTED_CALL(SSL_free(SSL_Good_Ptr));
+        STRICT_EXPECTED_CALL(SSL_CTX_free(SSL_Good_Context_Ptr));
+        STRICT_EXPECTED_CALL(socket_async_destroy(SSL_Good_Socket));
+        // End of arrange
+
+        ///act
+        tlsio_id->concrete_io_close(tlsio, on_io_close_complete, IO_CLOSE_COMPLETE_CONTEXT);
+
+        ///assert
+        ASSERT_IO_CLOSE_CALLBACK(true);
+        ASSERT_ARE_EQUAL(char_ptr, umock_c_get_expected_calls(), umock_c_get_actual_calls());
+
+
+        ///cleanup
+        tlsio_id->concrete_io_close(tlsio, on_io_close_complete, NULL);
+        tlsio_id->concrete_io_destroy(tlsio);
+    }
+
+    /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_080: [ The tlsio_openssl_compact_dowork shall establish an OpenSSL connection using the hostName and port provided during tlsio_openssl_compact_open. ]*/
+    /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_083: [ If tlsio_openssl_compact_dowork successfully opens the ssl connection it shall call on_io_open_complete with the on_io_open_complete_context parameter provided in tlsio_openssl_compact_open and IO_OPEN_OK. ]*/
+    TEST_FUNCTION(tlsio_openssl_compact__close_while_opening__succeeds)
+    {
+        ///arrange
+        reset_callback_context_records();
+        const IO_INTERFACE_DESCRIPTION* tlsio_id = tlsio_get_interface_description();
+        CONCRETE_IO_HANDLE tlsio = tlsio_id->concrete_io_create(&good_config);
+        int open_result = tlsio_id->concrete_io_open(tlsio, on_io_open_complete, IO_OPEN_COMPLETE_CONTEXT, on_bytes_received,
+            IO_BYTES_RECEIVED_CONTEXT, on_io_error, IO_ERROR_CONTEXT);
+        ASSERT_ARE_EQUAL(int, open_result, 0);
+        ASSERT_IO_OPEN_CALLBACK(false, IO_OPEN_ERROR);
+        umock_c_reset_all_calls();
+
+        // dowork_poll_dns (waiting)
+        STRICT_EXPECTED_CALL(dns_async_is_lookup_complete(GOOD_DNS_ASYNC_HANDLE)).SetReturn(false);
+        STRICT_EXPECTED_CALL(get_time(NULL));
+
+        // dowork_poll_dns (done)
+        STRICT_EXPECTED_CALL(dns_async_is_lookup_complete(GOOD_DNS_ASYNC_HANDLE));
+        STRICT_EXPECTED_CALL(dns_async_get_ipv4(GOOD_DNS_ASYNC_HANDLE));
+        STRICT_EXPECTED_CALL(dns_async_destroy(GOOD_DNS_ASYNC_HANDLE));
+        STRICT_EXPECTED_CALL(socket_async_create(SSL_Get_IPv4_OK, SSL_good_port_number, false, NULL));
+
+        // dowork_poll_socket (waiting)
+        STRICT_EXPECTED_CALL(socket_async_is_create_complete(SSL_Good_Socket, IGNORED_PTR_ARG)).CopyOutArgumentBuffer_is_complete(&bool_false, sizeof_bool);
+        STRICT_EXPECTED_CALL(get_time(NULL));
+
+        // dowork_poll_socket (done)
+        STRICT_EXPECTED_CALL(socket_async_is_create_complete(SSL_Good_Socket, IGNORED_PTR_ARG)).CopyOutArgumentBuffer_is_complete(&bool_true, sizeof_bool);
+        STRICT_EXPECTED_CALL(SSL_CTX_new(IGNORED_NUM_ARG));
+        STRICT_EXPECTED_CALL(SSL_new(IGNORED_PTR_ARG));
+        STRICT_EXPECTED_CALL(SSL_set_fd(IGNORED_PTR_ARG, IGNORED_NUM_ARG));
+
+        // dowork_poll_open_ssl (waiting SSL_ERROR_WANT_READ)
+        STRICT_EXPECTED_CALL(SSL_connect(SSL_Good_Ptr)).SetReturn(SSL_ERROR);
+        STRICT_EXPECTED_CALL(SSL_get_error(SSL_Good_Ptr, SSL_ERROR)).SetReturn(SSL_ERROR_WANT_READ);
+        STRICT_EXPECTED_CALL(get_time(NULL));
+
+        // dowork_poll_open_ssl (waiting SSL_ERROR_WANT_WRITE)
+        STRICT_EXPECTED_CALL(SSL_connect(SSL_Good_Ptr)).SetReturn(SSL_ERROR);
+        STRICT_EXPECTED_CALL(SSL_get_error(SSL_Good_Ptr, SSL_ERROR)).SetReturn(SSL_ERROR_WANT_WRITE);
+        STRICT_EXPECTED_CALL(get_time(NULL));
+
+        // dowork_poll_open_ssl (done)
+        //STRICT_EXPECTED_CALL(SSL_connect(SSL_Good_Ptr)).SetReturn(SSL_CONNECT_SUCCESS);
+
+        tlsio_id->concrete_io_dowork(tlsio); // dowork_poll_dns (waiting)
+        tlsio_id->concrete_io_dowork(tlsio); // dowork_poll_dns (done)
+        tlsio_id->concrete_io_dowork(tlsio); // dowork_poll_socket (waiting)
+        tlsio_id->concrete_io_dowork(tlsio); // dowork_poll_socket (done)
+        tlsio_id->concrete_io_dowork(tlsio); // dowork_poll_open_ssl (waiting SSL_ERROR_WANT_READ)
+        tlsio_id->concrete_io_dowork(tlsio); // dowork_poll_open_ssl (waiting SSL_ERROR_WANT_WRITE)
+        //tlsio_id->concrete_io_dowork(tlsio); // dowork_poll_open_ssl (done)
+
+        // Make sure the arrangement is correct so far
+        ASSERT_IO_OPEN_CALLBACK(false, IO_OPEN_OK);
+        ASSERT_ARE_EQUAL(char_ptr, umock_c_get_expected_calls(), umock_c_get_actual_calls());
+
+        umock_c_reset_all_calls();
+        STRICT_EXPECTED_CALL(SSL_free(SSL_Good_Ptr));
+        STRICT_EXPECTED_CALL(SSL_CTX_free(SSL_Good_Context_Ptr));
+        STRICT_EXPECTED_CALL(socket_async_destroy(SSL_Good_Socket));
+        // End of arrange
+
+        ///act
+        tlsio_id->concrete_io_close(tlsio, on_io_close_complete, IO_CLOSE_COMPLETE_CONTEXT);
+
+        ///assert
+        ASSERT_IO_OPEN_CALLBACK(true, IO_OPEN_CANCELLED);
+        ASSERT_IO_CLOSE_CALLBACK(true);
+        ASSERT_ARE_EQUAL(char_ptr, umock_c_get_expected_calls(), umock_c_get_actual_calls());
+
+        ///cleanup
+        tlsio_id->concrete_io_close(tlsio, on_io_close_complete, NULL);
+        tlsio_id->concrete_io_destroy(tlsio);
+    }
+
     /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_072: [ If tlsio_openssl_compact_dowork ever calls on_io_error, then subsequent calls to tlsio_openssl_compact_dowork shall do nothing. ]*/
     TEST_FUNCTION(tlsio_openssl_compact__dowork_send_post_error_do_nothing__succeeds)
     {
@@ -784,7 +1001,7 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
 
     /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_080: [ The tlsio_openssl_compact_dowork shall establish an OpenSSL connection using the hostName and port provided during tlsio_openssl_compact_open. ]*/
     /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_083: [ If tlsio_openssl_compact_dowork successfully opens the ssl connection it shall call on_io_open_complete with the on_io_open_complete_context parameter provided in tlsio_openssl_compact_open and IO_OPEN_OK. ]*/
-    TEST_FUNCTION(tlsio_openssl_compact__dowork_connection__succeeds)
+    TEST_FUNCTION(tlsio_openssl_compact__dowork_open__succeeds)
     {
         ///arrange
         reset_callback_context_records();

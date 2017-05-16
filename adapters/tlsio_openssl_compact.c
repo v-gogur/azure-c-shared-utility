@@ -446,26 +446,35 @@ int tlsio_openssl_close(CONCRETE_IO_HANDLE tls_io, ON_IO_CLOSE_COMPLETE on_io_cl
     }
     else
     {
-        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30XX_035: [ The tlsio_openssl_compact_close return value shall be 0 except as noted in the next requirement. ] */
-        if (tls_io_instance->tlsio_state == TLSIO_STATE_NOT_OPEN)
+        if (on_io_close_complete == NULL)
         {
-            /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_053: [ If tlsio_openssl_compact_open has not been called previously then tlsio_openssl_compact_close shall log an error and return FAILURE. ]*/
+            /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_055: [ If the tlsioon_io_close_complete_handle parameter is NULL, tlsio_openssl_compact_close shall log an error and return FAILURE. ]*/
             result = __FAILURE__;
-            LogError("tlsio_openssl_close has been called with no prior successful open.");
+            LogError("NULL on_io_close_complete");
         }
         else
         {
-            /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_052: [ The tlsio_openssl_compact_close return value shall be 0 unless tlsio_openssl_compact_open has not been called previously. ]*/
-            result = 0;
-            if (tls_io_instance->tlsio_state != TLSIO_STATE_OPEN &&
-                tls_io_instance->tlsio_state != TLSIO_STATE_ERROR)
+        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30XX_035: [ The tlsio_openssl_compact_close return value shall be 0 except as noted in the next requirement. ] */
+            if (tls_io_instance->tlsio_state == TLSIO_STATE_NOT_OPEN)
             {
-                // This is one of the OPENING states
-                /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_054: [ If tlsio_openssl_compact_open has been called but the process of opening has not been completed, then the on_io_open_complete callback shall be made with IO_OPEN_CANCELLED. ]*/
-                tls_io_instance->on_open_complete(tls_io_instance->on_open_complete_context, IO_OPEN_CANCELLED);
+                /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_053: [ If tlsio_openssl_compact_open has not been called previously then tlsio_openssl_compact_close shall log an error and return FAILURE. ]*/
+                result = __FAILURE__;
+                LogError("tlsio_openssl_close has been called with no prior successful open.");
             }
+            else
+            {
+                /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_052: [ The tlsio_openssl_compact_close return value shall be 0 unless tlsio_openssl_compact_open has not been called previously. ]*/
+                result = 0;
+                if (tls_io_instance->tlsio_state != TLSIO_STATE_OPEN &&
+                    tls_io_instance->tlsio_state != TLSIO_STATE_ERROR)
+                {
+                    // This is one of the OPENING states
+                    /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_054: [ If tlsio_openssl_compact_open has been called but the process of opening has not been completed, then the on_io_open_complete callback shall be made with IO_OPEN_CANCELLED. ]*/
+                    tls_io_instance->on_open_complete(tls_io_instance->on_open_complete_context, IO_OPEN_CANCELLED);
+                }
+            }
+            internal_close(tls_io_instance);
         }
-        internal_close(tls_io_instance);
     }
 
     if (on_io_close_complete != NULL)
