@@ -217,7 +217,7 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
     }
 
     /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_050: [ If the tlsio_handle parameter is NULL, tlsio_openssl_compact_close shall log an error and return FAILURE. ]*/
-    /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_055: [ If the tlsioon_io_close_complete_handle parameter is NULL, tlsio_openssl_compact_close shall log an error and return FAILURE. ]*/
+    /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_055: [ If the on_io_close_complete parameter is NULL, tlsio_openssl_compact_close shall log an error and return FAILURE. ]*/
     TEST_FUNCTION(tlsio_openssl_compact__close_parameter_validation__fails)
     {
         ///arrange

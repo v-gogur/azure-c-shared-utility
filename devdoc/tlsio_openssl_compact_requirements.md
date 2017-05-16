@@ -190,6 +190,8 @@ int tlsio_openssl_compact_close(CONCRETE_IO_HANDLE tlsio_handle, ON_IO_CLOSE_COM
 
 **SRS_TLSIO_OPENSSL_COMPACT_30_050: [** If the `tlsio_handle` parameter is NULL, `tlsio_openssl_compact_close` shall log an error and return _FAILURE_. **]**
 
+**SRS_TLSIO_OPENSSL_COMPACT_30_055: [** If the `on_io_close_complete` parameter is NULL, `tlsio_openssl_compact_close` shall log an error and return _FAILURE_. **]**
+
 **SRS_TLSIO_OPENSSL_COMPACT_30_051: [** The `tlsio_openssl_compact_close` shall forcibly close any existing ssl connection. **]**
 
 **SRS_TLSIO_OPENSSL_COMPACT_30_052: [** The `tlsio_openssl_compact_close` return value shall be 0 unless  `tlsio_openssl_compact_open` has not been called previously. **]**

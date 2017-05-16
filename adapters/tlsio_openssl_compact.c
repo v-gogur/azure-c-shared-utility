@@ -447,7 +447,7 @@ int tlsio_openssl_close(CONCRETE_IO_HANDLE tls_io, ON_IO_CLOSE_COMPLETE on_io_cl
     {
         if (on_io_close_complete == NULL)
         {
-            /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_055: [ If the tlsioon_io_close_complete_handle parameter is NULL, tlsio_openssl_compact_close shall log an error and return FAILURE. ]*/
+            /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_055: [ If the on_io_close_complete parameter is NULL, tlsio_openssl_compact_close shall log an error and return FAILURE. ]*/
             result = __FAILURE__;
             LogError("NULL on_io_close_complete");
         }
