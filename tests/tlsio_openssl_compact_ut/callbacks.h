@@ -55,17 +55,17 @@ static bool on_bytes_received_context_ok;
 static void reset_callback_context_records()
 {
     on_io_open_complete_call_count = 0;
-    on_io_open_complete_context_ok = false;
+    on_io_open_complete_context_ok = true;
     on_io_open_complete_result = (IO_OPEN_RESULT)-1;
     on_io_error_call_count = 0;
-    on_io_error_context_ok = false;
+    on_io_error_context_ok = true;
     on_io_close_call_count = 0;
-    on_io_close_context_ok = false;
+    on_io_close_context_ok = true;
     on_io_send_complete_call_count = 0;
-    on_io_send_complete_context_ok = false;
+    on_io_send_complete_context_ok = true;
     on_io_send_complete_result = (IO_SEND_RESULT)-1;
     on_bytes_received_call_count = 0;
-    on_bytes_received_context_ok = false;
+    on_bytes_received_context_ok = true;
 }
 
 // Callbacks used by the tlsio adapter
@@ -76,38 +76,53 @@ static void on_io_open_complete(void* context, IO_OPEN_RESULT open_result)
     ASSERT_IS_TRUE_WITH_MSG(result_valid, "Invalid IO_OPEN_RESULT");
     on_io_open_complete_call_count++;
     on_io_open_complete_result = open_result;
-    on_io_open_complete_context_ok = context == IO_OPEN_COMPLETE_CONTEXT;
+    if (context != IO_OPEN_COMPLETE_CONTEXT)
+    {
+        on_io_open_complete_context_ok = false;
+    }
 }
 
 static void on_io_send_complete(void* context, IO_SEND_RESULT send_result)
 {
     on_io_send_complete_call_count++;
-    on_io_send_complete_context_ok = context == IO_SEND_COMPLETE_CONTEXT;
     on_io_send_complete_result = send_result;
+    if (context != IO_SEND_COMPLETE_CONTEXT)
+    {
+        on_io_send_complete_context_ok = false;
+    }
 }
 
 static void on_io_close_complete(void* context)
 {
     on_io_close_call_count++;
-    on_io_close_context_ok = context == IO_CLOSE_COMPLETE_CONTEXT;
+    if (context != IO_CLOSE_COMPLETE_CONTEXT)
+    {
+        on_io_close_context_ok = false;
+    }
 }
 
 static void on_bytes_received(void* context, const unsigned char* buffer, size_t size)
 {
     on_bytes_received_call_count++;
-    on_bytes_received_context_ok = context == IO_BYTES_RECEIVED_CONTEXT;
 
     ASSERT_ARE_EQUAL(size_t, DOWORK_RECV_XFER_BUFFER_SIZE, size);
     for (int i = 0; i < DOWORK_RECV_XFER_BUFFER_SIZE; i++)
     {
         ASSERT_ARE_EQUAL(char, SSL_TEST_MESSAGE[i], buffer[i]);
     }
+    if (context != IO_BYTES_RECEIVED_CONTEXT)
+    {
+        on_bytes_received_context_ok = false;
+    }
 }
 
 static void on_io_error(void* context)
 {
     on_io_error_call_count = true;
-    on_io_error_context_ok = context == IO_ERROR_CONTEXT;
+    if (context != IO_ERROR_CONTEXT)
+    {
+        on_io_error_context_ok = false;
+    }
 }
 
 static void ASSERT_IO_ERROR_CALLBACK(bool called)
