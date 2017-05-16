@@ -432,7 +432,6 @@ int tlsio_openssl_open(CONCRETE_IO_HANDLE tls_io,
 }
 
 
-/* Codes_SRS_TLSIO_OPENSSL_COMPACT_30XX_004: [ The tlsio_openssl_compact shall call the callbacks functions defined in the xio.h ]*/
 int tlsio_openssl_close(CONCRETE_IO_HANDLE tls_io, ON_IO_CLOSE_COMPLETE on_io_close_complete, void* callback_context)
 {
     int result;
@@ -454,7 +453,6 @@ int tlsio_openssl_close(CONCRETE_IO_HANDLE tls_io, ON_IO_CLOSE_COMPLETE on_io_cl
         }
         else
         {
-        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30XX_035: [ The tlsio_openssl_compact_close return value shall be 0 except as noted in the next requirement. ] */
             if (tls_io_instance->tlsio_state == TLSIO_STATE_NOT_OPEN)
             {
                 /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_053: [ If tlsio_openssl_compact_open has not been called previously then tlsio_openssl_compact_close shall log an error and return FAILURE. ]*/

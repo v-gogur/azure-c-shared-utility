@@ -272,8 +272,7 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
         tlsio_id->concrete_io_destroy(tlsio);
     }
 
-    /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_080: [ The tlsio_openssl_compact_dowork shall establish an OpenSSL connection using the hostName and port provided during tlsio_openssl_compact_open. ]*/
-    /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_083: [ If tlsio_openssl_compact_dowork successfully opens the ssl connection it shall call on_io_open_complete with the on_io_open_complete_context parameter provided in tlsio_openssl_compact_open and IO_OPEN_OK. ]*/
+    /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_056: [ If tlsio_openssl_compact_close is called while there are unsent messages in the queue, the tlsio_openssl_compact_close shall call each message's on_send_complete, passing its associated callback_context and IO_SEND_CANCELLED. ]*/
     TEST_FUNCTION(tlsio_openssl_compact__close_with_unsent_messages__succeeds)
     {
         ///arrange
@@ -321,9 +320,10 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
         tlsio_id->concrete_io_destroy(tlsio);
     }
 
-    /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_080: [ The tlsio_openssl_compact_dowork shall establish an OpenSSL connection using the hostName and port provided during tlsio_openssl_compact_open. ]*/
-    /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_083: [ If tlsio_openssl_compact_dowork successfully opens the ssl connection it shall call on_io_open_complete with the on_io_open_complete_context parameter provided in tlsio_openssl_compact_open and IO_OPEN_OK. ]*/
-    TEST_FUNCTION(tlsio_openssl_compact__close_unopened__succeeds)
+    /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_052: [ The tlsio_openssl_compact_close return value shall be 0 unless tlsio_openssl_compact_open has not been called previously. ]*/
+    /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_057: [ When the closing process is complete, tlsio_openssl_compact_close shall call on_io_close_complete and pass the callback_context as a parameter. ]*/
+    // For this case, tlsio_openssl_compact_open has not been called previously
+    TEST_FUNCTION(tlsio_openssl_compact__close_unopened__fails)
     {
         ///arrange
         reset_callback_context_records();
@@ -344,8 +344,9 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
         tlsio_id->concrete_io_destroy(tlsio);
     }
 
-    /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_080: [ The tlsio_openssl_compact_dowork shall establish an OpenSSL connection using the hostName and port provided during tlsio_openssl_compact_open. ]*/
-    /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_083: [ If tlsio_openssl_compact_dowork successfully opens the ssl connection it shall call on_io_open_complete with the on_io_open_complete_context parameter provided in tlsio_openssl_compact_open and IO_OPEN_OK. ]*/
+    /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_052: [ The tlsio_openssl_compact_close return value shall be 0 unless tlsio_openssl_compact_open has not been called previously. ]*/
+    /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_057: [ When the closing process is complete, tlsio_openssl_compact_close shall call on_io_close_complete and pass the callback_context as a parameter. ]*/
+    // For this case, tlsio_openssl_compact_open has been called previously
     TEST_FUNCTION(tlsio_openssl_compact__close_after_open__succeeds)
     {
         ///arrange
@@ -377,8 +378,7 @@ BEGIN_TEST_SUITE(tlsio_openssl_compact_unittests)
         tlsio_id->concrete_io_destroy(tlsio);
     }
 
-    /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_080: [ The tlsio_openssl_compact_dowork shall establish an OpenSSL connection using the hostName and port provided during tlsio_openssl_compact_open. ]*/
-    /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_083: [ If tlsio_openssl_compact_dowork successfully opens the ssl connection it shall call on_io_open_complete with the on_io_open_complete_context parameter provided in tlsio_openssl_compact_open and IO_OPEN_OK. ]*/
+    /* Tests_SRS_TLSIO_OPENSSL_COMPACT_30_054: [ If tlsio_openssl_compact_open has been called but the process of opening has not been completed, then the on_io_open_complete callback shall be made with IO_OPEN_CANCELLED. ]*/
     TEST_FUNCTION(tlsio_openssl_compact__close_while_opening__succeeds)
     {
         ///arrange
