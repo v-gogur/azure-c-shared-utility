@@ -100,7 +100,7 @@ static void on_bytes_received(void* context, const unsigned char* buffer, size_t
     ASSERT_ARE_EQUAL(size_t, DOWORK_RECV_XFER_BUFFER_SIZE, size);
     for (int i = 0; i < DOWORK_RECV_XFER_BUFFER_SIZE; i++)
     {
-        ASSERT_ARE_EQUAL(char, RECEIVE_TEST_MESSAGE[i], buffer[i]);
+        ASSERT_ARE_EQUAL(char, SSL_TEST_MESSAGE[i], buffer[i]);
     }
 }
 
@@ -134,12 +134,12 @@ static void ASSERT_IO_OPEN_CALLBACK(bool called, int open_result)
     }
 }
 
-static void ASSERT_IO_SEND_CALLBACK(bool called, int open_result)
+static void ASSERT_IO_SEND_CALLBACK(bool called, int send_result)
 {
     if (called)
     {
         ASSERT_ARE_EQUAL_WITH_MSG(int, 1, on_io_send_complete_call_count, "on_io_send_complete_callback count mismatch");
-        ASSERT_ARE_EQUAL_WITH_MSG(int, on_io_send_complete_result, open_result, "on_io_send_complete result mismatch");
+        ASSERT_ARE_EQUAL_WITH_MSG(int, on_io_send_complete_result, send_result, "on_io_send_complete result mismatch");
         ASSERT_IS_TRUE_WITH_MSG(on_io_send_complete_context_ok, "io_send_complete_context not passed");
     }
     else

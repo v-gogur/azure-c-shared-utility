@@ -6,7 +6,7 @@ tlsio_openssl_compact
 tlsio_openssl_compact implements a tlsio adapter for compact OpenSSL platforms.  
 
 ### Retry Behavior
-The fact that the `xio` specification contains both a `close` method and a `destroy` method implies that retry sequences (open/fail/close/open) must succeed. In other words, it must work to `close` and the re-`open` an adapter after an error has occurred during either an IO error or an error during the `open` sequence.
+The `xio` specification allows retry sequences (open/fail/close/open) that must succeed. This means it must work to `close` and the re-`open` an adapter after an error has occurred during either an IO error or an error during the `open` sequence.
 
 Here are some retry sequences defined for the use in requirements:
 * **Failed open retry** means a retry (close/open) that occurs after `dowork` fails to establish its connection to the server.
@@ -264,7 +264,7 @@ Connection completion may require multiple calls to `tlsio_openssl_compact_dowor
 
 #### Data transmission behaviors
 
-**SRS_TLSIO_OPENSSL_COMPACT_30_090: [** If an enqueued message size is 0, the `tlsio_openssl_compact_dowork` shall just call the `on_send_complete` with `IO_SEND_OK`. **]**
+**SRS_TLSIO_OPENSSL_COMPACT_30_090: [** If an enqueued message size is 0, the `tlsio_openssl_compact_dowork` shall just call the `on_send_complete` with the `callback_context` and `IO_SEND_OK`. **]**
 
 **SRS_TLSIO_OPENSSL_COMPACT_30_091: [** If `tlsio_openssl_compact_dowork` is able to send all the bytes in an enqueued message, it shall call the messages's `on_send_complete` along with its associated `callback_context` and `IO_SEND_OK`. **]**
 
@@ -272,7 +272,7 @@ Connection completion may require multiple calls to `tlsio_openssl_compact_dowor
 
 **SRS_TLSIO_OPENSSL_COMPACT_30_093: [** If the OpenSSL send was not able to send an entire enqueued message at once, subsequent calls to `tlsio_openssl_compact_dowork` shall repeat OpenSSL send for the remaining bytes. **]**
 
-**SRS_TLSIO_OPENSSL_COMPACT_30_094: [** The `tlsio_openssl_compact_dowork` shall supply the provided `callback_context` when it calls `on_send_complete`. **]**
+**SRS_TLSIO_OPENSSL_COMPACT_30_094: [** If the send process encounters an internal error or calls `on_send_complete` with `IO_SEND_ERROR` due to either failure or timeout, it shall also call `on_io_error` and pass in the associated `on_io_error_context`. **]**
 
 **SRS_TLSIO_OPENSSL_COMPACT_30_095: [** If the send process fails before sending all of the bytes in an enqueued message, the `tlsio_openssl_compact_dowork` shall call the message's `on_send_complete` along with its associated `callback_context` and `IO_SEND_ERROR`. **]**
 

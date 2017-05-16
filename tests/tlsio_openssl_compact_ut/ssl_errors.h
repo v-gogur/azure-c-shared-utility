@@ -27,7 +27,10 @@ uint8_t* SSL_send_buffer = (uint8_t*)"111111112222222233333333";
 size_t SSL_send_message_size = sizeof(SSL_send_buffer) - 1;
 
 #define DOWORK_RECV_XFER_BUFFER_SIZE 64
-const char RECEIVE_TEST_MESSAGE[] = "0000000000111111111122222222223333333333444444444455555555556789";
+#define SSL_TEST_MESSAGE_SIZE 64
+#define SSL_WRITE_MAX_TEST_SIZE 60
+#define SSL_SHORT_MESSAGE_SIZE 30
+const char SSL_TEST_MESSAGE[] = "0000000000111111111122222222223333333333444444444455555555556789";
 
 
 
@@ -35,12 +38,29 @@ int my_SSL_read(SSL* ssl, uint8_t* buffer, size_t size)
 {
     size;
     ASSERT_ARE_EQUAL(int, (int)ssl, (int)SSL_Good_Ptr);
-    ASSERT_ARE_EQUAL(size_t, DOWORK_RECV_XFER_BUFFER_SIZE, sizeof(RECEIVE_TEST_MESSAGE) - 1);
+    ASSERT_ARE_EQUAL(size_t, DOWORK_RECV_XFER_BUFFER_SIZE, sizeof(SSL_TEST_MESSAGE) - 1);
     for (int i = 0; i < DOWORK_RECV_XFER_BUFFER_SIZE; i++)
     {
-        buffer[i] = (uint8_t)RECEIVE_TEST_MESSAGE[i];
+        buffer[i] = (uint8_t)SSL_TEST_MESSAGE[i];
     }
     return DOWORK_RECV_XFER_BUFFER_SIZE;
+}
+
+int my_SSL_write(SSL* ssl, uint8_t* buffer, size_t size)
+{
+    // "Send" no more than SSL_WRITE_MAX_TEST_SIZE bytes
+    (void)buffer; // not used
+    ASSERT_ARE_EQUAL(int, (int)ssl, (int)SSL_Good_Ptr);
+    int result;
+    if (size > SSL_WRITE_MAX_TEST_SIZE)
+    {
+        result = SSL_WRITE_MAX_TEST_SIZE;
+    }
+    else
+    {
+        result = size;
+    }
+    return result;
 }
 
 #if(0)

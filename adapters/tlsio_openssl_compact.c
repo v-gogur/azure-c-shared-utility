@@ -96,6 +96,8 @@ static bool close_and_destroy_head_message(TLS_IO_INSTANCE* tls_io_instance, IO_
     if (send_result == IO_SEND_ERROR)
     {
         tls_io_instance->tlsio_state = TLSIO_STATE_ERROR;
+        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_094: [ If the send process encounters an internal error or calls on_send_complete with IO_SEND_ERROR due to either failure or timeout, it shall also call on_io_error and pass in the associated on_io_error_context. ]*/
+        tls_io_instance->on_io_error(tls_io_instance->on_io_error_context);
     }
     LIST_ITEM_HANDLE head_pending_io = singlylinkedlist_get_head_item(tls_io_instance->pending_io_list);
     if (head_pending_io != NULL)
@@ -108,10 +110,12 @@ static bool close_and_destroy_head_message(TLS_IO_INSTANCE* tls_io_instance, IO_
         free(head_message);
         if (singlylinkedlist_remove(tls_io_instance->pending_io_list, head_pending_io) != 0)
         {
+            // This particular situation is a bizarre and unrecoverable internal error
+            /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_094: [ If the send process encounters an internal error or calls on_send_complete with IO_SEND_ERROR due to either failure or timeout, it shall also call on_io_error and pass in the associated on_io_error_context. ]*/
             tls_io_instance->tlsio_state = TLSIO_STATE_ERROR;
             // on_io_error is checked for NULL during tlsio_openssl_create
             tls_io_instance->on_io_error(tls_io_instance->on_io_error_context);
-            LogError("Program bug: unable to remove socket from list");
+            LogError("Unrecoverable program bug: unable to remove message from list");
         }
         result = true;
     }
@@ -577,20 +581,23 @@ static void dowork_read(TLS_IO_INSTANCE* tls_io_instance)
     unsigned char buffer[DOWORK_TRANSFER_BUFFER_SIZE];
     int rcv_bytes;
 
+    if (tls_io_instance->tlsio_state == TLSIO_STATE_OPEN)
+    {
     // SSL_read is not checked for errors because the "no data" condition is reported as a 
     // failure, but the docs do not guarantee that it will always be the same failure,
     // so we have no reliable wayto distinguish "no data" from something else.
-    rcv_bytes = SSL_read(tls_io_instance->ssl, buffer, sizeof(buffer));
-    if (rcv_bytes > 0)
-    {
-        // tls_io_instance->on_bytes_received was already checked for NULL
-        // in the call to tlsio_openssl_open
-        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_100: [ If the OpenSSL client is able to provide received data, the tlsio_openssl_compact_dowork shall read this data and call on_bytes_received with the pointer to the buffer containing the data, the number of bytes received, and the on_bytes_received_context. ]*/
-        tls_io_instance->on_bytes_received(tls_io_instance->on_bytes_received_context, buffer, rcv_bytes);
-    }
-    else
-    {
-        /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_102: [ If the OpenSSL client gets no data from its SSL_recv call then it shall not call the on_bytes_received callback. ]*/
+        rcv_bytes = SSL_read(tls_io_instance->ssl, buffer, sizeof(buffer));
+        if (rcv_bytes > 0)
+        {
+            // tls_io_instance->on_bytes_received was already checked for NULL
+            // in the call to tlsio_openssl_open
+            /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_100: [ If the OpenSSL client is able to provide received data, the tlsio_openssl_compact_dowork shall read this data and call on_bytes_received with the pointer to the buffer containing the data, the number of bytes received, and the on_bytes_received_context. ]*/
+            tls_io_instance->on_bytes_received(tls_io_instance->on_bytes_received_context, buffer, rcv_bytes);
+        }
+        else
+        {
+            /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_102: [ If the OpenSSL client gets no data from its SSL_recv call then it shall not call the on_bytes_received callback. ]*/
+        }
     }
 }
 
@@ -650,7 +657,7 @@ static void dowork_send(TLS_IO_INSTANCE* tls_io_instance)
             tls_io_instance->operation_timeout_end_time = time(NULL) + TLSIO_OPERATION_TIMEOUT_SECONDS;
         }
 
-        time_t now = time(NULL);
+        time_t now = get_time(NULL);
         if (now > tls_io_instance->operation_timeout_end_time)
         {
             /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_092: [ If the send process for any given message takes longer than the internally defined TLSIO_OPERATION_TIMEOUT_SECONDS it call the message's on_send_complete along with its associated callback_context and IO_SEND_ERROR. ]*/
@@ -661,7 +668,7 @@ static void dowork_send(TLS_IO_INSTANCE* tls_io_instance)
         {
             if (pending_message->unsent_size == 0)
             {
-                /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_090: [ If an enqueued message size is 0, the tlsio_openssl_compact_dowork shall just call the on_send_complete with IO_SEND_OK. ]*/
+                /* Codes_SRS_TLSIO_OPENSSL_COMPACT_30_090: [ If an enqueued message size is 0, the tlsio_openssl_compact_dowork shall just call the on_send_complete with the callback_context and IO_SEND_OK. ]*/
                 close_and_destroy_head_message(tls_io_instance, IO_SEND_OK);
             }
             else
@@ -848,15 +855,15 @@ void tlsio_openssl_dowork(CONCRETE_IO_HANDLE tls_io)
             // Waiting to be opened, nothing to do
             break;
         case TLSIO_STATE_OPENING_WAITING_DNS:
-            LogInfo("dowork_poll_dns");
+            //LogInfo("dowork_poll_dns");
             dowork_poll_dns(tls_io_instance);
             break;
         case TLSIO_STATE_OPENING_WAITING_SOCKET:
-            LogInfo("dowork_poll_socket");
+            //LogInfo("dowork_poll_socket");
             dowork_poll_socket(tls_io_instance);
             break;
         case TLSIO_STATE_OPENING_WAITING_SSL:
-            LogInfo("dowork_poll_ssl");
+            //LogInfo("dowork_poll_ssl");
             dowork_poll_open_ssl(tls_io_instance);
             break;
         case TLSIO_STATE_OPEN:
