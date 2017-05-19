@@ -5,6 +5,29 @@ xio requirements
 
 xio is module that implements an IO interface, abstracting from upper layers the functionality of simply sending or receiving a sequence of bytes.
 
+### Callbacks
+The xio interface is callback driven, and all callback functions are mandatory.
+
+### Reentrancy
+
+The xio interface does not support reentrancy. In particular, calls into a module's xio interface may not be made during any of that module's callback functions.
+
+### Behavior specification
+
+In order to simplify behavior description for xio modules, the following terms may be used to specify xio module behavior:
+* **IO_STATE_NOT_OPEN** means either that the module is newly constructed by `concrete_io_create`, or that the `concrete_io_close` complete callback has been received from a `concrete_io_close` call.
+* **XIO_STATE_OPENING** means that the `concrete_io_open` call has completed successfully but the `on_io_open_complete` callback has not been performed.
+* **XIO_STATE_OPEN** means that the `on_io_open_complete` callback has returned with `IO_OPEN_OK`.
+* **XIO_STATE_CLOSING** means that the `concrete_io_close` call has completed successfully but the `on_io_close_complete` callback has not been performed.
+* **XIO_STATE_ERROR** is the state entered after one or more of the following occurrences:
+  * `concrete_io_open` has returned an error
+  * `on_io_open_complete` has been called with `IO_OPEN_ERROR`
+  * `on_io_error` has been called
+
+
+Notice that these definitions imply that the xio module transitions from  *XIO_STATE_ERROR* to *IO_STATE_NOT_OPEN* when a `concrete_io_close` callback is recieved.
+
+
 ## Exposed API
 
 ```c
@@ -79,6 +102,8 @@ extern XIO_HANDLE xio_create(const IO_INTERFACE_DESCRIPTION* io_interface_descri
 
 **SRS_XIO_01_017: [** If allocating the memory needed for the IO interface fails then xio_create shall return NULL. **]**
 
+**SRS_XIO_30_040: [** Implementations of xio_create shall not perform time-consuming blocking calls. **]**
+
 ### xio_destroy
 
 ```c
@@ -90,6 +115,8 @@ extern void xio_destroy(XIO_HANDLE xio);
 **SRS_XIO_01_006: [** xio_destroy shall also call the concrete_xio_destroy function that is member of the io_interface_description argument passed to xio_create, while passing as argument to concrete_xio_destroy the result of the underlying concrete_xio_create handle that was called as part of the xio_create call. **]**
 
 **SRS_XIO_01_007: [** If the argument io is NULL, xio_destroy shall do nothing. **]**
+
+**SRS_XIO_30_041: [** Implementations of xio_destroy shall not perform time-consuming blocking calls. **]**
 
 ### xio_open
 
@@ -104,6 +131,12 @@ extern int xio_open(XIO_HANDLE xio, ON_IO_OPEN_COMPLETE on_io_open_complete, voi
 **SRS_XIO_01_021: [** If handle is NULL, xio_open shall return a non-zero value. **]**
 
 **SRS_XIO_01_022: [** If the underlying concrete_xio_open fails, xio_open shall return a non-zero value. **]**
+
+**SRS_XIO_01_042: [** If on_io_open_complete is NULL, xio_open shall return a non-zero value. **]**
+
+**SRS_XIO_01_043: [** If on_bytes_received is NULL, xio_open shall return a non-zero value. **]**
+
+**SRS_XIO_01_044: [** If on_io_error is NULL, xio_open shall return a non-zero value. **]**
 
 ### xio_close
 
