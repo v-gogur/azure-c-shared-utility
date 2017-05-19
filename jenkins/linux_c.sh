@@ -347,13 +347,7 @@ EOM
 
 
 #cd $build_root/build_all/linux 
-set -e
 
-
-
-build_root=$(cd "$(dirname "$0")/.." && pwd)
-
-cd $build_root
 
 
 
