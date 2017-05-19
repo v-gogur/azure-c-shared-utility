@@ -314,15 +314,15 @@ EOM
 
 
 
-echo ---------- Modifying iothub_client/samples/iothub_client_sample_http/iothub_client_sample_http.c file ---------- 
+#echo ---------- Modifying iothub_client/samples/iothub_client_sample_http/iothub_client_sample_http.c file ---------- 
 
 
 
-cd $build_root 
+#cd $build_root 
 
 
 
-sed -i 's/\[device connection string\]/'$IOTHUB_DEVICE_CONN_STR'/g' iothub_client/samples/iothub_client_sample_http/iothub_client_sample_http.c
+#sed -i 's/\[device connection string\]/'$IOTHUB_DEVICE_CONN_STR'/g' iothub_client/samples/iothub_client_sample_http/iothub_client_sample_http.c
 
 
 
@@ -342,16 +342,53 @@ sed -i 's/\[device connection string\]/'$IOTHUB_DEVICE_CONN_STR'/g' iothub_clien
 
 
 
-echo ---------- Building the SDK by executing build.sh script ---------- 
+#echo ---------- Building the SDK by executing build.sh script ---------- 
 
 
 
-cd $build_root/build_all/linux 
+#cd $build_root/build_all/linux 
+set -e
 
 
 
-./build.sh --toolchain-file toolchain-rpi.cmake --no-mqtt -cl --sysroot=$RPI_ROOT 
+build_root=$(cd "$(dirname "$0")/.." && pwd)
 
+cd $build_root
+
+
+
+build_folder=$build_root"/cmake/shared-util_linux"
+
+
+
+# Set the default cores
+
+CORES=$(grep -c ^processor /proc/cpuinfo 2>/dev/null || sysctl -n hw.ncpu)
+
+
+
+rm -r -f $build_folder
+
+mkdir -p $build_folder
+
+pushd $build_folder
+
+cmake --toolchain-file toolchain-rpi.cmake --no-mqtt -cl --sysroot=$RPI_ROOT -Drun_valgrind:BOOL=ON $build_root -Drun_unittests:BOOL=ON -Duse_wsio:BOOL=ON  
+make --jobs=$CORES
+
+
+
+#use doctored openssl
+
+export LD_LIBRARY_PATH=/usr/local/ssl/lib
+
+ctest -j $CORES --output-on-failure
+
+export LD_LIBRARY_PATH=
+
+
+
+popd
 
 
 [ $? -eq 0 ] || exit $?
