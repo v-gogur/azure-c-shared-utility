@@ -207,7 +207,13 @@ rm -r -f $build_folder
 mkdir -p $build_folder
 pushd $build_folder
  
-
 cmake --toolchain-file toolchain-inteledison.cmake --no-mqtt -cl --sysroot=$INTELEDISON_ROOT -Drun_valgrind:BOOL=ON $build_root -Drun_unittests:BOOL=ON -Duse_wsio:BOOL=ON 
+
+make --jobs=$CORES
+#use doctored openssl
+export LD_LIBRARY_PATH=/usr/local/ssl/lib
+ctest -j $CORES --output-on-failure
+export LD_LIBRARY_PATH=
+popd
 
 [ $? -eq 0 ] || exit $?
