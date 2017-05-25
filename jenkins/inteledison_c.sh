@@ -208,6 +208,6 @@ mkdir -p $build_folder
 pushd $build_folder
  
 
-cmake --toolchain-file toolchain-inteledison.cmake --skip-unittests --no-mqtt -cl --sysroot=$INTELEDISON_ROOT -Drun_valgrind:BOOL=ON $build_root -Drun_unittests:BOOL=ON -Duse_wsio:BOOL=ON 
+cmake --toolchain-file toolchain-inteledison.cmake --no-mqtt -cl --sysroot=$INTELEDISON_ROOT -Drun_valgrind:BOOL=ON $build_root -Drun_unittests:BOOL=ON -Duse_wsio:BOOL=ON 
 
 [ $? -eq 0 ] || exit $?
